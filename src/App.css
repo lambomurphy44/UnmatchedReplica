@@ -1,0 +1,442 @@
+/* ---- Setup Screen ---- */
+.setup-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 1.5rem;
+}
+
+.setup-screen h1 {
+  font-size: 3rem;
+  color: #ffd54f;
+  margin: 0;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
+.setup-screen h2 {
+  color: #aaa;
+  font-weight: 300;
+  margin-top: -0.5rem;
+}
+
+.setup-form {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+
+.setup-player {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  background: #22224a;
+  border-radius: 8px;
+  border: 1px solid #444;
+  min-width: 220px;
+}
+
+.setup-player label {
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+.setup-vs {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #ef5350;
+}
+
+.start-btn {
+  font-size: 1.3rem;
+  padding: 0.7em 2.5em;
+  background: #4a148c;
+  border-color: #7c43bd;
+  color: white;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+.start-btn:hover {
+  background: #6a1b9a;
+}
+
+/* ---- Game Container ---- */
+.game-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ---- HUD Row ---- */
+.huds-row {
+  display: flex;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  background: #16162e;
+}
+
+.player-hud {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  background: #1e1e3e;
+  border: 2px solid #333;
+}
+
+.player-hud.active {
+  border-color: #ffd54f;
+  background: #252550;
+}
+
+.hud-header {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 0.3rem;
+}
+
+.hud-name {
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.hud-char {
+  color: #aaa;
+  font-size: 0.9rem;
+}
+
+.hud-turn {
+  margin-left: auto;
+  background: #ffd54f;
+  color: #000;
+  padding: 0.15em 0.6em;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: bold;
+}
+
+.hud-fighters {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+
+.hud-fighter {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.hud-fighter.dead {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.hud-hp {
+  color: #ef5350;
+  font-weight: bold;
+}
+
+.hud-stats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8rem;
+  color: #888;
+  margin-top: 0.3rem;
+}
+
+/* ---- Main Area ---- */
+.main-area {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.board-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.board-svg {
+  background: #0d0d1a;
+  border-radius: 8px;
+  border: 1px solid #333;
+}
+
+/* ---- Right Panel ---- */
+.right-panel {
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #333;
+}
+
+.game-log {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.log-header {
+  padding: 0.5rem 0.8rem;
+  background: #1a1a3a;
+  font-weight: bold;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #333;
+}
+
+.log-entries {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.log-entry {
+  padding: 0.2rem 0.4rem;
+  font-size: 0.78rem;
+  color: #bbb;
+  border-bottom: 1px solid #1a1a2e;
+}
+
+/* ---- Action Bar ---- */
+.action-bar {
+  padding: 0.6rem 1rem;
+  background: #1a1a3a;
+  border-top: 1px solid #444;
+}
+
+.action-label {
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+  color: #ffd54f;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.6em 1.2em;
+  font-weight: bold;
+  min-width: 140px;
+}
+
+.action-btn small {
+  font-weight: normal;
+  font-size: 0.75rem;
+  color: #aaa;
+}
+
+.action-btn.maneuver {
+  background: #1b5e20;
+  border-color: #4caf50;
+}
+
+.action-btn.maneuver:hover {
+  background: #2e7d32;
+}
+
+.action-btn.attack {
+  background: #b71c1c;
+  border-color: #f44336;
+}
+
+.action-btn.attack:hover {
+  background: #c62828;
+}
+
+.action-btn.scheme {
+  background: #e65100;
+  border-color: #ff9800;
+}
+
+.action-btn.scheme:hover {
+  background: #ef6c00;
+}
+
+/* ---- Phase Prompts ---- */
+.phase-prompt {
+  padding: 0.6rem 1rem;
+  background: #1a1a3a;
+  border-top: 1px solid #444;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.phase-text {
+  font-size: 0.9rem;
+  color: #ffd54f;
+}
+
+.warning {
+  color: #ef5350;
+  font-weight: bold;
+}
+
+.fighter-select-buttons {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.fighter-btn {
+  padding: 0.4em 0.8em;
+}
+
+.fighter-btn.selected {
+  background: #1b5e20;
+  border-color: #4caf50;
+}
+
+.boost-prompt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.skip-btn {
+  margin-left: auto;
+  background: #424242;
+}
+
+.defender-prompt {
+  background: #2a1a1a;
+  border-top-color: #ef5350;
+}
+
+/* ---- Card Hand ---- */
+.hands-area {
+  background: #16162e;
+  border-top: 1px solid #333;
+  padding: 0.5rem 1rem;
+}
+
+.card-hand-label {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-bottom: 0.3rem;
+}
+
+.card-hand-cards {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.3rem;
+}
+
+.card-hidden {
+  color: #666;
+  font-style: italic;
+  padding: 1rem;
+}
+
+.game-card {
+  flex-shrink: 0;
+  width: 120px;
+  border: 2px solid #444;
+  border-radius: 6px;
+  background: #1e1e3a;
+  padding: 0.4rem;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+  font-size: 0.78rem;
+}
+
+.game-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.card-type {
+  text-align: center;
+  padding: 0.15em 0;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: bold;
+  letter-spacing: 1px;
+  color: white;
+  margin-bottom: 0.3rem;
+}
+
+.card-name {
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 0.3rem;
+  font-size: 0.82rem;
+}
+
+.card-value {
+  text-align: center;
+  margin-bottom: 0.2rem;
+}
+
+.card-val-num {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #ffd54f;
+}
+
+.card-boost {
+  text-align: center;
+  color: #81c784;
+  font-size: 0.72rem;
+}
+
+.card-effect {
+  margin-top: 0.3rem;
+  font-size: 0.7rem;
+  color: #ce93d8;
+  text-align: center;
+  font-style: italic;
+}
+
+/* ---- Game Over ---- */
+.game-over-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.game-over-box {
+  background: #1e1e3a;
+  padding: 2rem 3rem;
+  border-radius: 12px;
+  border: 2px solid #ffd54f;
+  text-align: center;
+}
+
+.game-over-box h2 {
+  color: #ffd54f;
+  margin-bottom: 1rem;
+  font-size: 2rem;
+}
+
+.game-over-box button {
+  font-size: 1.1rem;
+  padding: 0.6em 2em;
+  background: #4a148c;
+  border-color: #7c43bd;
+}
