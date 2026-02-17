@@ -29,6 +29,12 @@ export const PlayerHUD: React.FC<PlayerHUDProps> = ({ state, playerIndex, isActi
           </div>
         ))}
       </div>
+      {charDef.ability && (
+        <div className="hud-ability">
+          <span className="ability-name">{charDef.ability.name}:</span>{' '}
+          {charDef.ability.description}
+        </div>
+      )}
       <div className="hud-stats">
         <span>Hand: {player.hand.length}</span>
         <span>Deck: {player.deck.length}</span>

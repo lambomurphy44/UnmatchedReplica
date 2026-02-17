@@ -120,6 +120,11 @@ export const KING_ARTHUR: CharacterDef = {
     quantity: 1,
   },
   deckCards: arthurCards,
+  ability: {
+    name: 'Noble Sacrifice',
+    description: 'When King Arthur attacks, you may discard an additional card to add its BOOST value to the attack.',
+    timing: 'duringAttack',
+  },
 };
 
 // ---- MEDUSA ----
@@ -233,6 +238,11 @@ export const MEDUSA: CharacterDef = {
     quantity: 3,
   },
   deckCards: medusaCards,
+  ability: {
+    name: 'Gaze of Stone',
+    description: "At the start of your turn, you may deal 1 damage to an opposing fighter in Medusa's zone.",
+    timing: 'startOfTurn',
+  },
 };
 
 export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA];
