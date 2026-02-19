@@ -1,5 +1,5 @@
 import type {
-  GameState, Player, Fighter, Card, CardDef, CharacterDef, BoardMap,
+  GameState, Player, Fighter, Card, CardDef, CharacterDef, BoardMap, QueuedEffect,
 } from './types';
 import { DEFAULT_MAP } from './board';
 import { ALL_CHARACTERS } from './characters';
@@ -62,7 +62,7 @@ function buildFighters(charDef: CharacterDef, playerIndex: number, heroSpaceId: 
         maxHp: charDef.sidekick.hp,
         isRanged: charDef.sidekick.isRanged,
         moveValue: charDef.sidekick.moveValue,
-        spaceId: '', // unplaced - will be placed during setup
+        spaceId: '',
         owner: playerIndex,
       });
     }
@@ -84,7 +84,6 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
 
   const deck0 = buildDeck(char0);
   const deck1 = buildDeck(char1);
-
   const hand0 = deck0.splice(0, 5);
   const hand1 = deck1.splice(0, 5);
 
@@ -101,10 +100,15 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
     },
   ];
 
-  // Determine if we need sidekick placement
   const unplacedP0 = fighters0.filter(f => f.spaceId === '');
   const unplacedP1 = fighters1.filter(f => f.spaceId === '');
   const needsPlacement = unplacedP0.length > 0 || unplacedP1.length > 0;
+
+  // Record starting positions
+  const turnStartSpaces: Record<string, string> = {};
+  for (const f of allFighters) {
+    turnStartSpaces[f.id] = f.spaceId;
+  }
 
   const state: GameState = {
     players,
@@ -126,6 +130,8 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
     pendingSchemeCard: null,
     schemeMoveFighterId: null,
     schemeMoveRange: 0,
+    effectQueue: [],
+    turnStartSpaces,
   };
 
   if (needsPlacement) {
@@ -177,7 +183,6 @@ export function isSpaceOccupied(state: GameState, spaceId: string, excludeFighte
   return state.fighters.some(f => f.spaceId === spaceId && f.hp > 0 && f.id !== excludeFighterId);
 }
 
-// BFS for reachable spaces - occupied spaces cannot be stopped on but CAN be traversed through
 export function getReachableSpaces(board: BoardMap, fromId: string, steps: number, fighters: Fighter[], movingFighterId: string): string[] {
   const occupied = new Set(
     fighters.filter(f => f.hp > 0 && f.id !== movingFighterId && f.spaceId).map(f => f.spaceId)
@@ -199,7 +204,6 @@ export function getReachableSpaces(board: BoardMap, fromId: string, steps: numbe
     frontier = next;
   }
   visited.delete(fromId);
-  // Filter out occupied spaces from the result (can't stop on them)
   return Array.from(visited).filter(sid => !occupied.has(sid));
 }
 
@@ -236,7 +240,15 @@ export function getPlayableCards(state: GameState, cardType?: 'attack' | 'defens
     });
 }
 
-// ---- Sidekick Placement (Step 5) ----
+/** Check if a card can be played by a given fighter based on restriction */
+export function canFighterPlayCard(fighter: Fighter, cardDef: CardDef): boolean {
+  if (cardDef.restriction === 'any') return true;
+  if (cardDef.restriction === 'hero') return fighter.isHero;
+  if (cardDef.restriction === 'sidekick') return !fighter.isHero;
+  return true;
+}
+
+// ---- Sidekick Placement ----
 
 export function getValidPlacementSpaces(state: GameState, playerIndex: number): string[] {
   const heroSpaceId = playerIndex === 0
@@ -263,7 +275,6 @@ export function placeSidekick(state: GameState, spaceId: string): GameState {
   s.placementFighterIds = s.placementFighterIds.slice(1);
 
   if (s.placementFighterIds.length === 0) {
-    // Check if other player needs to place
     const otherPlayer = s.placementPlayer === 0 ? 1 : 0;
     const otherUnplaced = s.fighters.filter(f => f.owner === otherPlayer && !f.isHero && f.spaceId === '');
     if (otherUnplaced.length > 0) {
@@ -278,6 +289,7 @@ export function placeSidekick(state: GameState, spaceId: string): GameState {
       s.placementFighterIds = [];
       addLog(s, `All fighters placed. Let the battle begin!`);
       addLog(s, `--- ${s.players[s.currentPlayer].name}'s turn ---`);
+      recordTurnStartPositions(s);
       checkStartOfTurnAbility(s);
     }
   } else {
@@ -288,7 +300,7 @@ export function placeSidekick(state: GameState, spaceId: string): GameState {
   return s;
 }
 
-// ---- Actions ----
+// ---- Internal Helpers ----
 
 function clone(state: GameState): GameState {
   return JSON.parse(JSON.stringify(state));
@@ -299,12 +311,19 @@ function addLog(state: GameState, msg: string) {
   if (state.log.length > 80) state.log.shift();
 }
 
-// Step 9: Empty deck penalty - NO reshuffle, NO hand limit check
+function recordTurnStartPositions(state: GameState) {
+  state.turnStartSpaces = {};
+  for (const f of state.fighters) {
+    if (f.hp > 0) {
+      state.turnStartSpaces[f.id] = f.spaceId;
+    }
+  }
+}
+
 function drawCards(state: GameState, playerIndex: number, count: number) {
   const p = state.players[playerIndex];
   for (let i = 0; i < count; i++) {
     if (p.deck.length === 0) {
-      // Empty deck penalty: 2 damage to each alive fighter
       const alive = state.fighters.filter(f => f.owner === playerIndex && f.hp > 0);
       for (const fighter of alive) {
         fighter.hp = Math.max(0, fighter.hp - 2);
@@ -328,7 +347,6 @@ function checkHeroDeath(state: GameState) {
   }
 }
 
-// Step 9a: Medusa start-of-turn ability check
 function checkStartOfTurnAbility(state: GameState) {
   const charDef = getCharDef(state.players[state.currentPlayer].characterId);
   if (charDef.id === 'medusa') {
@@ -343,7 +361,6 @@ function checkStartOfTurnAbility(state: GameState) {
   }
 }
 
-// Step 8: Hand size limit at end of turn
 function endTurn(state: GameState) {
   const cp = state.players[state.currentPlayer];
   if (cp.hand.length > 7) {
@@ -363,6 +380,7 @@ function finishEndTurn(state: GameState) {
   state.maneuverCurrentFighter = null;
   state.phase = 'playing';
   addLog(state, `--- ${state.players[state.currentPlayer].name}'s turn ---`);
+  recordTurnStartPositions(state);
   checkStartOfTurnAbility(state);
 }
 
@@ -376,7 +394,7 @@ function useAction(state: GameState) {
   }
 }
 
-// ---- Discard Excess (Step 3) ----
+// ---- Discard Excess ----
 
 export function discardExcessCard(state: GameState, cardId: string): GameState {
   const s = clone(state);
@@ -388,14 +406,13 @@ export function discardExcessCard(state: GameState, cardId: string): GameState {
   const charDef = getCharDef(player.characterId);
   const def = getCardDef(card, charDef);
   addLog(s, `${player.name} discards ${def?.name || 'a card'}.`);
-
   if (player.hand.length <= 7) {
     finishEndTurn(s);
   }
   return s;
 }
 
-// ---- Medusa Gaze (Step 9a) ----
+// ---- Medusa Gaze ----
 
 export function getMedusaGazeTargets(state: GameState): Fighter[] {
   const hero = getHero(state, state.currentPlayer);
@@ -427,7 +444,7 @@ export function skipMedusaGaze(state: GameState): GameState {
   return s;
 }
 
-// ---- Maneuver (Step 6: moves ALL fighters) ----
+// ---- Maneuver ----
 
 export function startManeuver(state: GameState): GameState {
   const s = clone(state);
@@ -526,7 +543,9 @@ function advanceManeuver(state: GameState, movedFighterId: string): GameState {
   return state;
 }
 
-// ---- Attack ----
+// ========================================
+// ATTACK / COMBAT with proper timing
+// ========================================
 
 export function startAttack(state: GameState, attackerFighterId: string): GameState {
   const s = clone(state);
@@ -543,6 +562,11 @@ export function selectAttackTarget(state: GameState, defenderId: string): GameSt
     attackCard: null,
     defenseCard: null,
     attackBoostCard: null,
+    duringCombatBoost: null,
+    attackerEffectsCancelled: false,
+    defenderEffectsCancelled: false,
+    damageDealt: 0,
+    attackerWon: false,
   };
   s.phase = 'attack_selectCard';
   const attacker = getFighter(s, s.selectedFighter!)!;
@@ -563,7 +587,7 @@ export function selectAttackCard(state: GameState, cardId: string): GameState {
   const def = getCardDef(card, charDef);
   addLog(s, `Attacker plays ${def?.name || 'a card'}.`);
 
-  // Step 9b: Arthur attack boost
+  // Arthur's ability: boost when attacking with King Arthur
   const attacker = getFighter(s, s.combat.attackerId);
   if (attacker?.isHero && player.characterId === 'king_arthur' && player.hand.length > 0) {
     s.phase = 'arthur_attackBoost';
@@ -587,10 +611,10 @@ export function selectArthurBoostCard(state: GameState, cardId: string | null): 
       s.combat.attackBoostCard = card;
       const charDef = getCharDef(player.characterId);
       const def = getCardDef(card, charDef);
-      addLog(s, `King Arthur plays ${def?.name} as a boost (+${def?.boost || 0}).`);
+      addLog(s, `King Arthur plays ${def?.name} as ability boost (+${def?.boost || 0}).`);
     }
   } else {
-    addLog(s, `King Arthur skips the boost.`);
+    addLog(s, `King Arthur skips the ability boost.`);
   }
 
   s.phase = 'attack_defenderCard';
@@ -615,6 +639,8 @@ export function selectDefenseCard(state: GameState, cardId: string | null): Game
   return resolveCombat(s);
 }
 
+// ---- Combat Resolution (proper timing order) ----
+
 function resolveCombat(state: GameState): GameState {
   const s = state;
   if (!s.combat) return s;
@@ -629,46 +655,196 @@ function resolveCombat(state: GameState): GameState {
   const atkCardDef = s.combat.attackCard ? getCardDef(s.combat.attackCard, atkCharDef) : null;
   const defCardDef = s.combat.defenseCard ? getCardDef(s.combat.defenseCard, defCharDef) : null;
 
-  let atkValue = atkCardDef?.value || 0;
-  const defValue = defCardDef?.value || 0;
+  // ===== PHASE 1: IMMEDIATELY =====
+  // Defender's immediately effects first, then attacker's
+  const defImmediate = defCardDef?.effects.filter(e => e.timing === 'immediately') || [];
+  const atkImmediate = atkCardDef?.effects.filter(e => e.timing === 'immediately') || [];
 
-  // Step 9b: Arthur's attack boost
-  if (s.combat.attackBoostCard) {
-    const boostDef = getCardDef(s.combat.attackBoostCard, atkCharDef);
-    const boostVal = boostDef?.boost || 0;
-    atkValue += boostVal;
+  // Process defender's IMMEDIATELY effects
+  for (const effect of defImmediate) {
+    if (effect.type === 'cancelEffects') {
+      s.combat.attackerEffectsCancelled = true;
+      addLog(s, `${defCardDef?.name}: Cancels all effects on attacker's card!`);
+    }
   }
 
-  // Check for Feint (cancel effects)
-  const atkCancelled = defCardDef?.effect?.type === 'cancelEffects';
-  const defCancelled = atkCardDef?.effect?.type === 'cancelEffects';
+  // Process attacker's IMMEDIATELY effects (only if not cancelled)
+  if (!s.combat.attackerEffectsCancelled) {
+    for (const effect of atkImmediate) {
+      if (effect.type === 'cancelEffects') {
+        s.combat.defenderEffectsCancelled = true;
+        addLog(s, `${atkCardDef?.name}: Cancels all effects on defender's card!`);
+      }
+    }
+  }
 
-  const damage = Math.max(0, atkValue - defValue);
+  // ===== PHASE 2: DURING COMBAT =====
+  const defDuring = (!s.combat.defenderEffectsCancelled
+    ? defCardDef?.effects.filter(e => e.timing === 'duringCombat') : []) || [];
+  const atkDuring = (!s.combat.attackerEffectsCancelled
+    ? atkCardDef?.effects.filter(e => e.timing === 'duringCombat') : []) || [];
+
+  let preventDamage = false;
+
+  // Defender's DURING COMBAT
+  for (const effect of defDuring) {
+    if (effect.type === 'preventDamage') {
+      preventDamage = true;
+      addLog(s, `${defCardDef?.name}: All damage is prevented!`);
+    }
+    if (effect.type === 'valueIfMoved') {
+      const startSpace = s.turnStartSpaces[defender.id];
+      if (startSpace && startSpace !== defender.spaceId) {
+        // This modifies the defense card value - but this card is versatile used as defense
+        // The card value is already set, we'll adjust in the value calculation
+        addLog(s, `${defCardDef?.name}: Fighter moved this turn, value becomes ${effect.amount}!`);
+      }
+    }
+  }
+
+  // Attacker's DURING COMBAT
+  let atkHasDuringBoost = false;
+  for (const effect of atkDuring) {
+    if (effect.type === 'boostAttack') {
+      // Noble Sacrifice / Second Shot: the attacker may play a boost card
+      // Check if player has cards in hand
+      if (atkPlayer.hand.length > 0) {
+        atkHasDuringBoost = true;
+      }
+    }
+    if (effect.type === 'valueIfMoved') {
+      const startSpace = s.turnStartSpaces[attacker.id];
+      if (startSpace && startSpace !== attacker.spaceId) {
+        addLog(s, `${atkCardDef?.name}: Fighter moved this turn, value becomes ${effect.amount}!`);
+      }
+    }
+  }
+
+  // If there's a during-combat boost to play, pause and let player choose
+  if (atkHasDuringBoost) {
+    s.phase = 'combat_duringBoost';
+    addLog(s, `${atkCardDef?.name}: You may play a card as a boost. Select a card or skip.`);
+    return s;
+  }
+
+  // Continue to damage calculation
+  return resolveCombatDamage(s);
+}
+
+/** Called after all during-combat effects are resolved */
+function resolveCombatDamage(state: GameState): GameState {
+  const s = state;
+  if (!s.combat) return s;
+
+  const attacker = getFighter(s, s.combat.attackerId)!;
+  const defender = getFighter(s, s.combat.defenderId)!;
+  const atkPlayer = s.players[attacker.owner];
+  const defPlayer = s.players[defender.owner];
+  const atkCharDef = getCharDef(atkPlayer.characterId);
+  const defCharDef = getCharDef(defPlayer.characterId);
+
+  const atkCardDef = s.combat.attackCard ? getCardDef(s.combat.attackCard, atkCharDef) : null;
+  const defCardDef = s.combat.defenseCard ? getCardDef(s.combat.defenseCard, defCharDef) : null;
+
+  // ===== Calculate values =====
+  let atkValue = atkCardDef?.value || 0;
+  let defValue = defCardDef?.value || 0;
+
+  // Arthur's ability boost
+  if (s.combat.attackBoostCard) {
+    const boostDef = getCardDef(s.combat.attackBoostCard, atkCharDef);
+    atkValue += boostDef?.boost || 0;
+  }
+
+  // During-combat card boost (Noble Sacrifice / Second Shot)
+  if (s.combat.duringCombatBoost) {
+    const boostCharDef = getCharDef(atkPlayer.characterId);
+    const boostDef = getCardDef(s.combat.duringCombatBoost, boostCharDef);
+    atkValue += boostDef?.boost || 0;
+  }
+
+  // Momentous Shift: if fighter moved, value becomes 5
+  if (!s.combat.attackerEffectsCancelled && atkCardDef) {
+    for (const effect of atkCardDef.effects) {
+      if (effect.timing === 'duringCombat' && effect.type === 'valueIfMoved') {
+        const startSpace = s.turnStartSpaces[attacker.id];
+        if (startSpace && startSpace !== attacker.spaceId) {
+          atkValue = (atkValue - (atkCardDef.value || 0)) + (effect.amount || 0);
+        }
+      }
+    }
+  }
+  if (!s.combat.defenderEffectsCancelled && defCardDef) {
+    for (const effect of defCardDef.effects) {
+      if (effect.timing === 'duringCombat' && effect.type === 'valueIfMoved') {
+        const startSpace = s.turnStartSpaces[defender.id];
+        if (startSpace && startSpace !== defender.spaceId) {
+          defValue = (defValue - (defCardDef.value || 0)) + (effect.amount || 0);
+        }
+      }
+    }
+  }
+
+  // Check for preventDamage (Bewilderment)
+  let preventDamage = false;
+  if (!s.combat.defenderEffectsCancelled && defCardDef) {
+    for (const effect of defCardDef.effects) {
+      if (effect.timing === 'duringCombat' && effect.type === 'preventDamage') {
+        preventDamage = true;
+      }
+    }
+  }
+
+  // ===== PHASE 3: DAMAGE =====
+  const damage = preventDamage ? 0 : Math.max(0, atkValue - defValue);
+  s.combat.damageDealt = damage;
+  s.combat.attackerWon = atkValue > defValue;
 
   addLog(s, `Attack: ${atkValue} vs Defense: ${defValue}`);
 
-  if (damage > 0) {
+  if (preventDamage) {
+    addLog(s, `All damage prevented!`);
+  } else if (damage > 0) {
     defender.hp = Math.max(0, defender.hp - damage);
     addLog(s, `${defender.name} takes ${damage} damage! (${defender.hp} HP remaining)`);
   } else {
     addLog(s, `Attack blocked!`);
   }
 
-  // After-combat effects
-  if (atkCardDef?.effect && !atkCancelled) {
-    applyEffect(s, atkCardDef.effect, attacker, defender, atkPlayer);
-  }
-  if (defCardDef?.effect && !defCancelled) {
-    applyEffect(s, defCardDef.effect, defender, attacker, defPlayer);
+  // ===== PHASE 4: AFTER COMBAT =====
+  // Collect after-combat effects: defender first, then attacker
+  const defAfter = (!s.combat.defenderEffectsCancelled
+    ? defCardDef?.effects.filter(e => e.timing === 'afterCombat') : []) || [];
+  const atkAfter = (!s.combat.attackerEffectsCancelled
+    ? atkCardDef?.effects.filter(e => e.timing === 'afterCombat') : []) || [];
+
+  const effectQueue: QueuedEffect[] = [];
+  const attackerWon = s.combat.attackerWon;
+
+  // Process defender's after-combat effects
+  for (const effect of defAfter) {
+    processAfterCombatEffect(s, effect, defender, attacker, defPlayer, atkPlayer, attackerWon ? false : !attackerWon && defValue > atkValue, effectQueue);
   }
 
-  // Discard all combat cards
+  // Process attacker's after-combat effects
+  for (const effect of atkAfter) {
+    processAfterCombatEffect(s, effect, attacker, defender, atkPlayer, defPlayer, attackerWon, effectQueue);
+  }
+
+  // Discard combat cards
   if (s.combat.attackCard) atkPlayer.discard.push(s.combat.attackCard);
   if (s.combat.attackBoostCard) atkPlayer.discard.push(s.combat.attackBoostCard);
+  if (s.combat.duringCombatBoost) atkPlayer.discard.push(s.combat.duringCombatBoost);
   if (s.combat.defenseCard) defPlayer.discard.push(s.combat.defenseCard);
 
   s.combat = null;
   checkHeroDeath(s);
+
+  // If there are interactive effects queued, process them
+  if (s.phase !== 'gameOver' && effectQueue.length > 0) {
+    s.effectQueue = effectQueue;
+    return processNextEffect(s);
+  }
 
   if (s.phase !== 'gameOver') {
     useAction(s);
@@ -677,30 +853,275 @@ function resolveCombat(state: GameState): GameState {
   return s;
 }
 
-function applyEffect(state: GameState, effect: { type: string; amount?: number }, self: Fighter, opponent: Fighter, player: Player) {
+/** Process a single after-combat effect. Auto-resolves simple ones, queues interactive ones. */
+function processAfterCombatEffect(
+  state: GameState,
+  effect: { type: string; amount?: number; param?: string },
+  self: Fighter,
+  opponent: Fighter,
+  selfPlayer: Player,
+  opponentPlayer: Player,
+  selfWon: boolean,
+  queue: QueuedEffect[],
+) {
   switch (effect.type) {
-    case 'afterCombatDamage':
-      if (effect.amount) {
+    case 'drawCards':
+      if (effect.amount && effect.amount > 0) {
+        drawCards(state, selfPlayer.index, effect.amount);
+        addLog(state, `${selfPlayer.name} draws ${effect.amount} card(s).`);
+      }
+      break;
+
+    case 'drawIfWon':
+      if (selfWon && effect.amount && effect.amount > 0) {
+        drawCards(state, selfPlayer.index, effect.amount);
+        addLog(state, `${selfPlayer.name} won and draws ${effect.amount} card(s)!`);
+      }
+      break;
+
+    case 'regroupDraw':
+      if (selfWon) {
+        drawCards(state, selfPlayer.index, 2);
+        addLog(state, `${selfPlayer.name} won and draws 2 cards!`);
+      } else {
+        drawCards(state, selfPlayer.index, 1);
+        addLog(state, `${selfPlayer.name} draws 1 card.`);
+      }
+      break;
+
+    case 'dealDamageIfWon':
+      if (selfWon && effect.amount && opponent.hp > 0) {
         opponent.hp = Math.max(0, opponent.hp - effect.amount);
-        addLog(state, `${self.name} deals ${effect.amount} extra damage to ${opponent.name}!`);
+        addLog(state, `${self.name} deals ${effect.amount} additional damage to ${opponent.name}! (${opponent.hp} HP)`);
         checkHeroDeath(state);
       }
       break;
-    case 'draw':
-      if (effect.amount) {
-        drawCards(state, player.index, effect.amount);
-        addLog(state, `${player.name} draws ${effect.amount} card(s).`);
+
+    case 'opponentDiscards':
+      if (opponentPlayer.hand.length > 0) {
+        queue.push({
+          type: 'opponentDiscard',
+          playerIndex: opponentPlayer.index,
+          label: `${opponentPlayer.name} must discard ${effect.amount || 1} card(s).`,
+        });
+      } else {
+        addLog(state, `${opponentPlayer.name} has no cards to discard.`);
       }
       break;
-    case 'heal':
-      if (effect.amount) {
-        self.hp = Math.min(self.maxHp, self.hp + effect.amount);
-        addLog(state, `${self.name} recovers ${effect.amount} HP.`);
+
+    case 'moveSelf':
+      if (self.hp > 0 && effect.amount && effect.amount > 0) {
+        queue.push({
+          type: 'moveFighter',
+          playerIndex: selfPlayer.index,
+          fighterId: self.id,
+          range: effect.amount,
+          label: `Move ${self.name} up to ${effect.amount} spaces.`,
+        });
       }
       break;
-    case 'cancelEffects':
+
+    case 'moveHero': {
+      const hero = getHero(state, selfPlayer.index);
+      if (hero && hero.hp > 0 && effect.amount && effect.amount > 0) {
+        queue.push({
+          type: 'moveFighter',
+          playerIndex: selfPlayer.index,
+          fighterId: hero.id,
+          range: effect.amount,
+          label: `Move ${hero.name} up to ${effect.amount} spaces.`,
+        });
+      }
+      break;
+    }
+
+    case 'moveFighterIfWon':
+      if (selfWon && effect.amount && effect.amount > 0) {
+        // Move the self fighter (simplified - in real game you choose either fighter)
+        if (self.hp > 0) {
+          queue.push({
+            type: 'moveFighter',
+            playerIndex: selfPlayer.index,
+            fighterId: self.id,
+            range: effect.amount,
+            label: `Move ${self.name} up to ${effect.amount} spaces (won combat).`,
+          });
+        }
+      }
+      break;
+
+    case 'moveHarpies': {
+      // Auto-resolve: move each harpy (simplified - log that they could move)
+      const harpies = state.fighters.filter(f =>
+        f.owner === selfPlayer.index && !f.isHero && f.hp > 0 && f.spaceId
+      );
+      for (const harpy of harpies) {
+        queue.push({
+          type: 'moveFighter',
+          playerIndex: selfPlayer.index,
+          fighterId: harpy.id,
+          range: effect.amount || 3,
+          label: `Move ${harpy.name} up to ${effect.amount || 3} spaces.`,
+        });
+      }
+      break;
+    }
+
+    case 'placeMerlinAny': {
+      const merlin = state.fighters.find(f =>
+        f.owner === selfPlayer.index && !f.isHero && f.hp > 0
+      );
+      if (merlin) {
+        queue.push({
+          type: 'placeFighter',
+          playerIndex: selfPlayer.index,
+          fighterId: merlin.id,
+          label: `Place ${merlin.name} on any unoccupied space.`,
+        });
+      }
+      break;
+    }
+
+    case 'healIfLow': {
+      const hero = getHero(state, selfPlayer.index);
+      const threshold = parseInt(effect.param || '4', 10);
+      if (hero && hero.hp > 0 && hero.hp <= threshold) {
+        hero.hp = effect.amount || hero.hp;
+        addLog(state, `The Holy Grail restores ${hero.name} to ${hero.hp} HP!`);
+      }
+      break;
+    }
+  }
+}
+
+// ---- During-Combat Boost (Noble Sacrifice / Second Shot) ----
+
+export function selectDuringCombatBoost(state: GameState, cardId: string | null): GameState {
+  const s = clone(state);
+  if (!s.combat) return s;
+  const player = s.players[s.currentPlayer];
+
+  if (cardId) {
+    const cardIdx = player.hand.findIndex(c => c.id === cardId);
+    if (cardIdx >= 0) {
+      const card = player.hand.splice(cardIdx, 1)[0];
+      s.combat.duringCombatBoost = card;
+      const charDef = getCharDef(player.characterId);
+      const def = getCardDef(card, charDef);
+      addLog(s, `Plays ${def?.name} as combat boost (+${def?.boost || 0}).`);
+    }
+  } else {
+    addLog(s, `Skips combat boost.`);
+  }
+
+  return resolveCombatDamage(s);
+}
+
+// ---- Post-Combat Effect Queue ----
+
+function processNextEffect(state: GameState): GameState {
+  if (state.effectQueue.length === 0) {
+    if (state.phase !== 'gameOver') {
+      useAction(state);
+    }
+    return state;
+  }
+
+  const effect = state.effectQueue[0];
+  state.effectQueue = state.effectQueue.slice(1);
+
+  switch (effect.type) {
+    case 'moveFighter':
+      state.schemeMoveFighterId = effect.fighterId || null;
+      state.schemeMoveRange = effect.range || 0;
+      state.phase = 'effect_moveFighter';
+      addLog(state, effect.label);
+      break;
+
+    case 'opponentDiscard':
+      state.phase = 'effect_opponentDiscard';
+      addLog(state, effect.label);
+      break;
+
+    case 'placeFighter':
+      state.schemeMoveFighterId = effect.fighterId || null;
+      state.phase = 'effect_placeFighter';
+      addLog(state, effect.label);
       break;
   }
+
+  return state;
+}
+
+// ---- Effect Resolution Handlers ----
+
+export function resolveEffectMove(state: GameState, targetSpaceId: string): GameState {
+  const s = clone(state);
+  const fighterId = s.schemeMoveFighterId;
+  if (!fighterId) return continueEffectQueue(s);
+  const fighter = getFighter(s, fighterId);
+  if (!fighter) return continueEffectQueue(s);
+
+  const reachable = getReachableSpaces(s.board, fighter.spaceId, s.schemeMoveRange, s.fighters, fighter.id);
+  if (reachable.includes(targetSpaceId)) {
+    fighter.spaceId = targetSpaceId;
+    addLog(s, `${fighter.name} moved to ${targetSpaceId}.`);
+  }
+
+  s.schemeMoveFighterId = null;
+  s.schemeMoveRange = 0;
+  return continueEffectQueue(s);
+}
+
+export function skipEffectMove(state: GameState): GameState {
+  const s = clone(state);
+  const fighterId = s.schemeMoveFighterId;
+  if (fighterId) {
+    const f = getFighter(s, fighterId);
+    addLog(s, `${f?.name} stays in place.`);
+  }
+  s.schemeMoveFighterId = null;
+  s.schemeMoveRange = 0;
+  return continueEffectQueue(s);
+}
+
+export function resolveEffectDiscard(state: GameState, cardId: string): GameState {
+  const s = clone(state);
+  // Find which player needs to discard - it's the opponent of the current player
+  const opponentIndex = s.currentPlayer === 0 ? 1 : 0;
+  const player = s.players[opponentIndex];
+  const cardIdx = player.hand.findIndex(c => c.id === cardId);
+  if (cardIdx < 0) return s;
+
+  const card = player.hand.splice(cardIdx, 1)[0];
+  player.discard.push(card);
+  const charDef = getCharDef(player.characterId);
+  const def = getCardDef(card, charDef);
+  addLog(s, `${player.name} discards ${def?.name || 'a card'}.`);
+
+  return continueEffectQueue(s);
+}
+
+export function resolveEffectPlace(state: GameState, spaceId: string): GameState {
+  const s = clone(state);
+  const fighterId = s.schemeMoveFighterId;
+  if (!fighterId) return continueEffectQueue(s);
+  const fighter = getFighter(s, fighterId);
+  if (!fighter) return continueEffectQueue(s);
+
+  if (!isSpaceOccupied(s, spaceId)) {
+    fighter.spaceId = spaceId;
+    addLog(s, `${fighter.name} placed on ${spaceId}.`);
+  }
+
+  s.schemeMoveFighterId = null;
+  return continueEffectQueue(s);
+}
+
+function continueEffectQueue(state: GameState): GameState {
+  checkHeroDeath(state);
+  if (state.phase === 'gameOver') return state;
+  return processNextEffect(state);
 }
 
 // ---- Scheme ----
@@ -722,88 +1143,278 @@ export function playScheme(state: GameState, cardId: string): GameState {
 
   addLog(s, `${player.name} plays scheme: ${def.name}`);
 
-  if (def.effect) {
-    const hero = getHero(s, s.currentPlayer)!;
-    switch (def.effect.type) {
-      case 'draw':
-        drawCards(s, s.currentPlayer, def.effect.amount || 0);
-        addLog(s, `Drew ${def.effect.amount} card(s).`);
-        break;
-      case 'heal':
-        hero.hp = Math.min(hero.maxHp, hero.hp + (def.effect.amount || 0));
-        addLog(s, `${hero.name} recovers ${def.effect.amount} HP.`);
-        break;
-      case 'dealDamage': {
-        // Step 7: Deferred - enter target selection phase
-        s.pendingSchemeCard = card;
-        s.phase = 'scheme_selectTarget';
-        addLog(s, `Select an enemy fighter in your hero's zone to deal ${def.effect.amount} damage.`);
-        return s; // Don't discard or useAction yet
+  // Handle each scheme by ID
+  switch (def.id) {
+    // --- King Arthur schemes ---
+    case 'arthur_lady_of_the_lake': {
+      // Search deck and discard for Excalibur
+      let found = false;
+      // Check deck
+      const deckIdx = player.deck.findIndex(c => c.defId === 'arthur_excalibur');
+      if (deckIdx >= 0) {
+        const excalibur = player.deck.splice(deckIdx, 1)[0];
+        player.hand.push(excalibur);
+        player.deck = shuffle(player.deck);
+        addLog(s, `Found Excalibur in the deck! Added to hand. Deck reshuffled.`);
+        found = true;
       }
-      case 'moveSidekick': {
-        // Step 8: Deferred - enter sidekick movement phase
-        const sidekicks = s.fighters.filter(f => f.owner === s.currentPlayer && !f.isHero && f.hp > 0);
-        if (sidekicks.length === 0) {
-          addLog(s, 'No alive sidekick to move.');
-          break;
+      if (!found) {
+        // Check discard
+        const discIdx = player.discard.findIndex(c => c.defId === 'arthur_excalibur');
+        if (discIdx >= 0) {
+          const excalibur = player.discard.splice(discIdx, 1)[0];
+          player.hand.push(excalibur);
+          addLog(s, `Retrieved Excalibur from the discard pile!`);
+          found = true;
         }
-        s.pendingSchemeCard = card;
-        s.schemeMoveFighterId = sidekicks[0].id;
-        s.schemeMoveRange = def.effect.amount || 0;
-        s.phase = 'scheme_moveSidekick';
-        addLog(s, `Move ${sidekicks[0].name} up to ${def.effect.amount} spaces.`);
-        return s; // Don't discard or useAction yet
       }
-      case 'reviveSidekick': {
-        const deadSidekicks = s.fighters.filter(f => f.owner === s.currentPlayer && !f.isHero && f.hp <= 0);
-        if (deadSidekicks.length > 0) {
-          const revived = deadSidekicks[0];
-          revived.hp = revived.maxHp;
-          // Find an unoccupied adjacent space to hero, or unoccupied space in hero's zone
-          const heroSpace = hero.spaceId;
-          const space = getSpace(s.board, heroSpace);
-          let placedSpace = '';
-          if (space) {
-            // Try adjacent spaces first
-            for (const adjId of space.adjacentIds) {
-              if (!isSpaceOccupied(s, adjId)) {
-                placedSpace = adjId;
-                break;
-              }
-            }
-            // Fallback: any unoccupied space in the same zone
-            if (!placedSpace) {
-              const zoneSpaces = s.board.spaces.filter(sp => sp.zone === space.zone && !isSpaceOccupied(s, sp.id));
-              if (zoneSpaces.length > 0) {
-                placedSpace = zoneSpaces[0].id;
-              }
-            }
-          }
-          if (placedSpace) {
-            revived.spaceId = placedSpace;
-            addLog(s, `${revived.name} returns to the battlefield on ${placedSpace}!`);
-          } else {
-            addLog(s, `No available space to place ${revived.name}.`);
-            revived.hp = 0; // Can't place, stays dead
-          }
+      if (!found) {
+        // Check hand (already have it)
+        const inHand = player.hand.some(c => c.defId === 'arthur_excalibur');
+        if (inHand) {
+          addLog(s, `Excalibur is already in hand.`);
         } else {
-          addLog(s, `No defeated sidekicks to revive.`);
+          addLog(s, `Excalibur could not be found.`);
         }
-        break;
       }
+      break;
     }
+
+    case 'arthur_prophecy': {
+      // Look at top 4, add 2 to hand (simplified: just draw 2)
+      const drawCount = Math.min(2, player.deck.length);
+      drawCards(s, s.currentPlayer, drawCount);
+      addLog(s, `Prophecy: Drew ${drawCount} card(s) from the top of the deck.`);
+      break;
+    }
+
+    case 'arthur_command_storms': {
+      // Move each of your fighters up to 3 spaces
+      const ownFighters = getAliveFighters(s, s.currentPlayer);
+      if (ownFighters.length > 0) {
+        s.pendingSchemeCard = card;
+        s.maneuverBoost = 0;
+        s.maneuverFightersToMove = ownFighters.map(f => f.id);
+        s.maneuverCurrentFighter = null;
+        s.schemeMoveRange = 3;
+        s.phase = 'scheme_moveAll';
+        addLog(s, `Command the Storms: Move each of your fighters up to 3 spaces.`);
+        return s;
+      }
+      break;
+    }
+
+    case 'arthur_restless_spirits': {
+      // Deal 2 damage to each opposing fighter in Merlin's zone
+      const merlin = s.fighters.find(f => f.owner === s.currentPlayer && !f.isHero && f.hp > 0);
+      if (merlin && merlin.spaceId) {
+        const merlinSpace = getSpace(s.board, merlin.spaceId);
+        if (merlinSpace) {
+          const opponentIndex = s.currentPlayer === 0 ? 1 : 0;
+          const targets = getAliveFighters(s, opponentIndex).filter(f =>
+            sameZone(s.board, merlin.spaceId, f.spaceId)
+          );
+          let anyDefeated = false;
+          for (const target of targets) {
+            target.hp = Math.max(0, target.hp - 2);
+            addLog(s, `Restless Spirits deals 2 damage to ${target.name}! (${target.hp} HP)`);
+            if (target.hp <= 0) anyDefeated = true;
+          }
+          if (targets.length === 0) {
+            addLog(s, `No opposing fighters in Merlin's zone.`);
+          }
+          if (anyDefeated) {
+            drawCards(s, s.currentPlayer, 1);
+            addLog(s, `A fighter was defeated! Drew 1 card.`);
+          }
+          checkHeroDeath(s);
+        }
+      } else {
+        addLog(s, `Merlin is not on the board.`);
+      }
+      break;
+    }
+
+    // --- Medusa schemes ---
+    case 'medusa_momentary_glance': {
+      // Deal 2 damage to a fighter in Medusa's zone
+      s.pendingSchemeCard = card;
+      s.phase = 'scheme_selectTarget';
+      addLog(s, `Select a fighter in Medusa's zone to deal 2 damage.`);
+      return s;
+    }
+
+    case 'medusa_winged_frenzy': {
+      // Move each fighter up to 3, then revive a harpy
+      const ownFighters = getAliveFighters(s, s.currentPlayer);
+      if (ownFighters.length > 0) {
+        s.pendingSchemeCard = card;
+        s.maneuverBoost = 0;
+        s.maneuverFightersToMove = ownFighters.map(f => f.id);
+        s.maneuverCurrentFighter = null;
+        s.schemeMoveRange = 3;
+        s.phase = 'scheme_moveAll';
+        addLog(s, `Winged Frenzy: Move each of your fighters up to 3 spaces.`);
+        return s;
+      }
+      // If no alive fighters, skip to revive
+      return handleWingedFrenzyRevive(s, card);
+    }
+
+    default:
+      addLog(s, `Scheme has no programmed effect.`);
+      break;
   }
 
   player.discard.push(card);
+  if (s.phase !== 'gameOver') {
+    useAction(s);
+  }
+  return s;
+}
+
+// ---- Scheme: Move All (Command the Storms / Winged Frenzy) ----
+
+export function selectSchemeMoveAllFighter(state: GameState, fighterId: string): GameState {
+  const s = clone(state);
+  s.maneuverCurrentFighter = fighterId;
+  s.phase = 'maneuver_moveFighter'; // Reuse maneuver move UI
+  const f = getFighter(s, fighterId);
+  addLog(s, `Moving ${f?.name} (up to ${s.schemeMoveRange} spaces). Click a space or skip.`);
+  return s;
+}
+
+export function executeSchemeMoveAllMove(state: GameState, targetSpaceId: string): GameState {
+  const s = clone(state);
+  const fighterId = s.maneuverCurrentFighter;
+  if (!fighterId) return s;
+  const fighter = getFighter(s, fighterId);
+  if (!fighter) return s;
+
+  const reachable = getReachableSpaces(s.board, fighter.spaceId, s.schemeMoveRange, s.fighters, fighter.id);
+  if (reachable.includes(targetSpaceId)) {
+    fighter.spaceId = targetSpaceId;
+    addLog(s, `${fighter.name} moved to ${targetSpaceId}.`);
+  }
+
+  return advanceSchemeMoveAll(s, fighterId);
+}
+
+export function skipSchemeMoveAllFighter(state: GameState): GameState {
+  const s = clone(state);
+  const fighterId = s.maneuverCurrentFighter;
+  if (fighterId) {
+    const f = getFighter(s, fighterId);
+    addLog(s, `${f?.name} stays in place.`);
+    return advanceSchemeMoveAll(s, fighterId);
+  }
+  return s;
+}
+
+export function skipAllSchemeMoveAll(state: GameState): GameState {
+  const s = clone(state);
+  addLog(s, `Skips all movement.`);
+  s.maneuverFightersToMove = [];
+  s.maneuverCurrentFighter = null;
+  return finishSchemeMoveAll(s);
+}
+
+function advanceSchemeMoveAll(state: GameState, movedFighterId: string): GameState {
+  state.maneuverFightersToMove = state.maneuverFightersToMove.filter(id => id !== movedFighterId);
+  state.maneuverCurrentFighter = null;
+  if (state.maneuverFightersToMove.length > 0) {
+    state.phase = 'scheme_moveAll';
+    addLog(state, `Select next fighter to move, or skip all.`);
+    return state;
+  }
+  return finishSchemeMoveAll(state);
+}
+
+function finishSchemeMoveAll(state: GameState): GameState {
+  const schemeCard = state.pendingSchemeCard;
+  const player = currentPlayer(state);
+
+  // Check if this was Winged Frenzy (needs harpy revival)
+  if (schemeCard) {
+    const charDef = getCharDef(player.characterId);
+    const def = getCardDef(schemeCard, charDef);
+    if (def?.id === 'medusa_winged_frenzy') {
+      return handleWingedFrenzyRevive(state, schemeCard);
+    }
+    // Not Winged Frenzy (Command the Storms or similar)
+    player.discard.push(schemeCard);
+  }
+  state.pendingSchemeCard = null;
+  state.schemeMoveRange = 0;
+
+  if (state.phase !== 'gameOver') {
+    useAction(state);
+  }
+  return state;
+}
+
+function handleWingedFrenzyRevive(state: GameState, schemeCard: Card): GameState {
+  const deadHarpies = state.fighters.filter(f =>
+    f.owner === state.currentPlayer && !f.isHero && f.hp <= 0
+  );
+  if (deadHarpies.length > 0) {
+    const harpy = deadHarpies[0];
+    harpy.hp = harpy.maxHp;
+    state.schemeMoveFighterId = harpy.id;
+    state.phase = 'scheme_reviveHarpy';
+    addLog(state, `${harpy.name} is revived! Place it on a space in Medusa's zone.`);
+    return state;
+  }
+
+  addLog(state, `No defeated Harpies to revive.`);
+  const player = currentPlayer(state);
+  player.discard.push(schemeCard);
+  state.pendingSchemeCard = null;
+  state.schemeMoveRange = 0;
+
+  if (state.phase !== 'gameOver') {
+    useAction(state);
+  }
+  return state;
+}
+
+// ---- Scheme: Revive Harpy placement ----
+
+export function getReviveHarpySpaces(state: GameState): string[] {
+  const hero = getHero(state, state.currentPlayer);
+  if (!hero) return [];
+  const heroSpace = getSpace(state.board, hero.spaceId);
+  if (!heroSpace) return [];
+  return state.board.spaces
+    .filter(sp => sp.zone === heroSpace.zone && !isSpaceOccupied(state, sp.id, state.schemeMoveFighterId || undefined))
+    .map(sp => sp.id);
+}
+
+export function resolveReviveHarpy(state: GameState, spaceId: string): GameState {
+  const s = clone(state);
+  const fighterId = s.schemeMoveFighterId;
+  if (!fighterId) return s;
+  const fighter = getFighter(s, fighterId);
+  if (!fighter) return s;
+
+  fighter.spaceId = spaceId;
+  addLog(s, `${fighter.name} placed on ${spaceId}.`);
+
+  const player = currentPlayer(s);
+  if (s.pendingSchemeCard) {
+    player.discard.push(s.pendingSchemeCard);
+  }
+  s.pendingSchemeCard = null;
+  s.schemeMoveFighterId = null;
+  s.schemeMoveRange = 0;
 
   if (s.phase !== 'gameOver') {
     useAction(s);
   }
-
   return s;
 }
 
-// ---- Scheme Target Selection (Step 7: Petrify) ----
+// ---- Scheme Target Selection (A Momentary Glance / Petrify) ----
 
 export function getSchemeTargets(state: GameState): Fighter[] {
   const hero = getHero(state, state.currentPlayer);
@@ -822,9 +1433,11 @@ export function resolveSchemeTarget(state: GameState, targetFighterId: string): 
   const def = getCardDef(s.pendingSchemeCard, charDef);
 
   const target = getFighter(s, targetFighterId);
-  if (target && def?.effect?.amount) {
-    target.hp = Math.max(0, target.hp - def.effect.amount);
-    addLog(s, `${def.name} deals ${def.effect.amount} damage to ${target.name}! (${target.hp} HP)`);
+  if (target) {
+    // A Momentary Glance deals 2 damage
+    const dmg = 2;
+    target.hp = Math.max(0, target.hp - dmg);
+    addLog(s, `${def?.name || 'Scheme'} deals ${dmg} damage to ${target.name}! (${target.hp} HP)`);
     checkHeroDeath(s);
   }
 
@@ -837,7 +1450,7 @@ export function resolveSchemeTarget(state: GameState, targetFighterId: string): 
   return s;
 }
 
-// ---- Scheme Sidekick Movement (Step 8: Royal Command) ----
+// ---- Scheme Sidekick Movement (kept for compatibility) ----
 
 export function resolveSchemeSidekickMove(state: GameState, targetSpaceId: string): GameState {
   const s = clone(state);
@@ -871,4 +1484,21 @@ function cleanupSchemeMove(state: GameState): GameState {
   state.schemeMoveRange = 0;
   useAction(state);
   return state;
+}
+
+// ---- Helpers for effect phases ----
+
+export function getEffectMoveSpaces(state: GameState): string[] {
+  const fighterId = state.schemeMoveFighterId;
+  if (!fighterId) return [];
+  const fighter = getFighter(state, fighterId);
+  if (!fighter || !fighter.spaceId) return [];
+  return getReachableSpaces(state.board, fighter.spaceId, state.schemeMoveRange, state.fighters, fighter.id);
+}
+
+export function getPlaceFighterSpaces(state: GameState): string[] {
+  const fighterId = state.schemeMoveFighterId;
+  return state.board.spaces
+    .filter(sp => !isSpaceOccupied(state, sp.id, fighterId || undefined))
+    .map(sp => sp.id);
 }

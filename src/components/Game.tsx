@@ -7,8 +7,14 @@ import {
   executeManeuverMove, skipFighterMove, skipAllManeuverMoves,
   startAttack, selectAttackTarget, selectAttackCard, selectDefenseCard,
   selectArthurBoostCard,
+  selectDuringCombatBoost,
+  resolveEffectMove, skipEffectMove, resolveEffectDiscard, resolveEffectPlace,
+  getEffectMoveSpaces, getPlaceFighterSpaces,
   playScheme, getSchemeTargets, resolveSchemeTarget,
   resolveSchemeSidekickMove, skipSchemeSidekickMove,
+  selectSchemeMoveAllFighter, executeSchemeMoveAllMove,
+  skipSchemeMoveAllFighter, skipAllSchemeMoveAll,
+  getReviveHarpySpaces, resolveReviveHarpy,
   discardExcessCard,
   useMedusaGaze, skipMedusaGaze, getMedusaGazeTargets,
   placeSidekick, getValidPlacementSpaces,
@@ -26,13 +32,11 @@ export const Game: React.FC = () => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [stateHistory, setStateHistory] = useState<GameState[]>([]);
 
-  // Character select
   const [p0Char, setP0Char] = useState('king_arthur');
   const [p1Char, setP1Char] = useState('medusa');
   const [p0Name, setP0Name] = useState('Player 1');
   const [p1Name, setP1Name] = useState('Player 2');
 
-  // Undo-aware state updater
   const pushState = useCallback((newState: GameState) => {
     setGameState(prev => {
       if (prev) {
@@ -77,19 +81,21 @@ export const Game: React.FC = () => {
   const handleSpaceClick = useCallback((spaceId: string) => {
     if (!gameState) return;
 
-    // Sidekick placement
     if (gameState.phase === 'place_sidekick') {
       pushState(placeSidekick(gameState, spaceId));
       return;
     }
 
-    // Maneuver movement
     if (gameState.phase === 'maneuver_moveFighter') {
-      pushState(executeManeuverMove(gameState, spaceId));
+      // Could be from maneuver OR from scheme_moveAll (reusing this phase)
+      if (gameState.pendingSchemeCard) {
+        pushState(executeSchemeMoveAllMove(gameState, spaceId));
+      } else {
+        pushState(executeManeuverMove(gameState, spaceId));
+      }
       return;
     }
 
-    // Attack target selection
     if (gameState.phase === 'attack_selectTarget') {
       const targets = getValidTargets(gameState, gameState.selectedFighter!);
       const targetOnSpace = targets.find(t => t.spaceId === spaceId);
@@ -99,7 +105,6 @@ export const Game: React.FC = () => {
       return;
     }
 
-    // Scheme target selection (Petrify)
     if (gameState.phase === 'scheme_selectTarget') {
       const targets = getSchemeTargets(gameState);
       const targetOnSpace = targets.find(t => t.spaceId === spaceId);
@@ -109,13 +114,11 @@ export const Game: React.FC = () => {
       return;
     }
 
-    // Scheme sidekick movement (Royal Command)
     if (gameState.phase === 'scheme_moveSidekick') {
       pushState(resolveSchemeSidekickMove(gameState, spaceId));
       return;
     }
 
-    // Medusa gaze target
     if (gameState.phase === 'medusa_startAbility') {
       const targets = getMedusaGazeTargets(gameState);
       const targetOnSpace = targets.find(t => t.spaceId === spaceId);
@@ -124,44 +127,67 @@ export const Game: React.FC = () => {
       }
       return;
     }
+
+    // Post-combat effect: move fighter
+    if (gameState.phase === 'effect_moveFighter') {
+      pushState(resolveEffectMove(gameState, spaceId));
+      return;
+    }
+
+    // Post-combat effect: place fighter anywhere
+    if (gameState.phase === 'effect_placeFighter') {
+      pushState(resolveEffectPlace(gameState, spaceId));
+      return;
+    }
+
+    // Scheme: revive harpy placement
+    if (gameState.phase === 'scheme_reviveHarpy') {
+      pushState(resolveReviveHarpy(gameState, spaceId));
+      return;
+    }
   }, [gameState, pushState]);
 
   const handleCardClick = useCallback((cardId: string) => {
     if (!gameState) return;
 
-    // Maneuver boost
     if (gameState.phase === 'maneuver_boost') {
       pushState(applyManeuverBoost(gameState, cardId));
       return;
     }
 
-    // Attack card selection
     if (gameState.phase === 'attack_selectCard') {
       pushState(selectAttackCard(gameState, cardId));
       return;
     }
 
-    // Arthur boost card
     if (gameState.phase === 'arthur_attackBoost') {
       pushState(selectArthurBoostCard(gameState, cardId));
       return;
     }
 
-    // Defense card selection
+    if (gameState.phase === 'combat_duringBoost') {
+      pushState(selectDuringCombatBoost(gameState, cardId));
+      return;
+    }
+
     if (gameState.phase === 'attack_defenderCard') {
       pushState(selectDefenseCard(gameState, cardId));
       return;
     }
 
-    // Scheme card selection
     if (gameState.phase === 'scheme_selectCard') {
       pushState(playScheme(gameState, cardId));
       return;
     }
 
-    // Discard excess
     if (gameState.phase === 'discard_excess') {
       pushState(discardExcessCard(gameState, cardId));
+      return;
+    }
+
+    // Post-combat: opponent discard
+    if (gameState.phase === 'effect_opponentDiscard') {
+      pushState(resolveEffectDiscard(gameState, cardId));
       return;
     }
   }, [gameState, pushState]);
@@ -176,31 +202,29 @@ export const Game: React.FC = () => {
   const highlightedSpaces = (() => {
     if (!gameState) return [];
 
-    // Sidekick placement
     if (gameState.phase === 'place_sidekick' && gameState.placementPlayer !== null) {
       return getValidPlacementSpaces(gameState, gameState.placementPlayer);
     }
 
-    // Maneuver movement
     if (gameState.phase === 'maneuver_moveFighter' && gameState.maneuverCurrentFighter) {
       const f = getFighter(gameState, gameState.maneuverCurrentFighter);
       if (f) {
-        const range = f.moveValue + gameState.maneuverBoost;
+        // Use schemeMoveRange if it's a scheme movement, otherwise use fighter move + boost
+        const range = gameState.pendingSchemeCard
+          ? gameState.schemeMoveRange
+          : f.moveValue + gameState.maneuverBoost;
         return getReachableSpaces(gameState.board, f.spaceId, range, gameState.fighters, f.id);
       }
     }
 
-    // Attack target
     if (gameState.phase === 'attack_selectTarget' && gameState.selectedFighter) {
       return getValidTargets(gameState, gameState.selectedFighter).map(t => t.spaceId);
     }
 
-    // Scheme target (Petrify)
     if (gameState.phase === 'scheme_selectTarget') {
       return getSchemeTargets(gameState).map(t => t.spaceId);
     }
 
-    // Scheme sidekick movement
     if (gameState.phase === 'scheme_moveSidekick' && gameState.schemeMoveFighterId) {
       const f = getFighter(gameState, gameState.schemeMoveFighterId);
       if (f) {
@@ -208,9 +232,23 @@ export const Game: React.FC = () => {
       }
     }
 
-    // Medusa gaze
     if (gameState.phase === 'medusa_startAbility') {
       return getMedusaGazeTargets(gameState).map(t => t.spaceId);
+    }
+
+    // Post-combat effect: move fighter
+    if (gameState.phase === 'effect_moveFighter') {
+      return getEffectMoveSpaces(gameState);
+    }
+
+    // Post-combat effect: place fighter anywhere
+    if (gameState.phase === 'effect_placeFighter') {
+      return getPlaceFighterSpaces(gameState);
+    }
+
+    // Scheme: revive harpy
+    if (gameState.phase === 'scheme_reviveHarpy') {
+      return getReviveHarpySpaces(gameState);
     }
 
     return [];
@@ -263,18 +301,15 @@ export const Game: React.FC = () => {
 
   return (
     <div className="game-container">
-      {/* Undo button */}
       {stateHistory.length > 0 && gameState.phase !== 'gameOver' && (
         <button className="undo-btn" onClick={handleUndo}>Undo</button>
       )}
 
-      {/* Top: player HUDs */}
       <div className="huds-row">
         <PlayerHUD state={gameState} playerIndex={0} isActive={gameState.currentPlayer === 0} />
         <PlayerHUD state={gameState} playerIndex={1} isActive={gameState.currentPlayer === 1} />
       </div>
 
-      {/* Main area */}
       <div className="main-area">
         <div className="board-area">
           <Board
@@ -329,22 +364,33 @@ export const Game: React.FC = () => {
         </div>
       )}
 
-      {gameState.phase === 'maneuver_selectFighter' && (
+      {(gameState.phase === 'maneuver_selectFighter' || gameState.phase === 'scheme_moveAll') && (
         <div className="phase-prompt">
           <div className="phase-text">Select a fighter to move{gameState.maneuverBoost > 0 ? ` (+${gameState.maneuverBoost} boost)` : ''}:</div>
           <div className="fighter-select-buttons">
             {gameState.maneuverFightersToMove.map(fid => {
               const f = getFighter(gameState, fid);
               if (!f) return null;
+              const moveRange = gameState.phase === 'scheme_moveAll'
+                ? gameState.schemeMoveRange
+                : f.moveValue + gameState.maneuverBoost;
               return (
                 <button key={fid} className="fighter-btn"
-                  onClick={() => pushState(selectManeuverFighter(gameState, fid))}>
-                  {f.isHero ? '★' : '●'} {f.name} (move: {f.moveValue + gameState.maneuverBoost})
+                  onClick={() => pushState(
+                    gameState.phase === 'scheme_moveAll'
+                      ? selectSchemeMoveAllFighter(gameState, fid)
+                      : selectManeuverFighter(gameState, fid)
+                  )}>
+                  {f.isHero ? '★' : '●'} {f.name} (move: {moveRange})
                 </button>
               );
             })}
           </div>
-          <button className="skip-btn" onClick={() => pushState(skipAllManeuverMoves(gameState))}>
+          <button className="skip-btn" onClick={() => pushState(
+            gameState.phase === 'scheme_moveAll'
+              ? skipAllSchemeMoveAll(gameState)
+              : skipAllManeuverMoves(gameState)
+          )}>
             Skip All Movement
           </button>
         </div>
@@ -357,7 +403,11 @@ export const Game: React.FC = () => {
             <div className="phase-text">
               Moving {f?.name} - click a highlighted space, or skip.
             </div>
-            <button className="skip-btn" onClick={() => pushState(skipFighterMove(gameState))}>
+            <button className="skip-btn" onClick={() => pushState(
+              gameState.pendingSchemeCard
+                ? skipSchemeMoveAllFighter(gameState)
+                : skipFighterMove(gameState)
+            )}>
               Skip This Fighter
             </button>
           </div>
@@ -383,6 +433,17 @@ export const Game: React.FC = () => {
             King Arthur: Play an additional card as a boost (its BOOST value is added to attack), or skip.
           </div>
           <button className="skip-btn" onClick={() => pushState(selectArthurBoostCard(gameState, null))}>
+            Skip Boost
+          </button>
+        </div>
+      )}
+
+      {gameState.phase === 'combat_duringBoost' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            During Combat: You may play a card as a boost (its BOOST value is added to your attack), or skip.
+          </div>
+          <button className="skip-btn" onClick={() => pushState(selectDuringCombatBoost(gameState, null))}>
             Skip Boost
           </button>
         </div>
@@ -425,6 +486,51 @@ export const Game: React.FC = () => {
         );
       })()}
 
+      {gameState.phase === 'scheme_reviveHarpy' && (() => {
+        const f = gameState.schemeMoveFighterId ? getFighter(gameState, gameState.schemeMoveFighterId) : null;
+        return (
+          <div className="phase-prompt">
+            <div className="phase-text">
+              Place {f?.name} on a highlighted space in Medusa's zone.
+            </div>
+          </div>
+        );
+      })()}
+
+      {gameState.phase === 'effect_moveFighter' && (() => {
+        const f = gameState.schemeMoveFighterId ? getFighter(gameState, gameState.schemeMoveFighterId) : null;
+        return (
+          <div className="phase-prompt">
+            <div className="phase-text">
+              Move {f?.name} up to {gameState.schemeMoveRange} spaces - click a highlighted space, or skip.
+            </div>
+            <button className="skip-btn" onClick={() => pushState(skipEffectMove(gameState))}>
+              Skip Movement
+            </button>
+          </div>
+        );
+      })()}
+
+      {gameState.phase === 'effect_opponentDiscard' && (
+        <div className="phase-prompt defender-prompt">
+          <div className="phase-text">
+            {opponentPlayer.name}: Choose a card to discard.
+            <span className="warning"> (Hand the device to {opponentPlayer.name}!)</span>
+          </div>
+        </div>
+      )}
+
+      {gameState.phase === 'effect_placeFighter' && (() => {
+        const f = gameState.schemeMoveFighterId ? getFighter(gameState, gameState.schemeMoveFighterId) : null;
+        return (
+          <div className="phase-prompt">
+            <div className="phase-text">
+              Place {f?.name} on any highlighted space.
+            </div>
+          </div>
+        );
+      })()}
+
       {gameState.phase === 'discard_excess' && (
         <div className="phase-prompt">
           <div className="phase-text">
@@ -451,6 +557,13 @@ export const Game: React.FC = () => {
             onCardClick={handleCardClick}
             filter="defense"
             label={`${opponentPlayer.name}'s Hand (Defense)`}
+          />
+        ) : gameState.phase === 'effect_opponentDiscard' ? (
+          <CardHand
+            hand={opponentPlayer.hand}
+            charDef={opponentCharDef}
+            onCardClick={handleCardClick}
+            label={`${opponentPlayer.name}'s Hand (Choose to discard)`}
           />
         ) : (
           <CardHand
