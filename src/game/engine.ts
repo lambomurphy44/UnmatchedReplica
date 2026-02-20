@@ -195,7 +195,7 @@ export function getReachableSpaces(board: BoardMap, fromId: string, steps: numbe
       const space = getSpace(board, sid);
       if (!space) continue;
       for (const adjId of space.adjacentIds) {
-        if (!visited.has(adjId)) {
+        if (!visited.has(adjId) && !occupied.has(adjId)) {
           visited.add(adjId);
           next.push(adjId);
         }
@@ -204,7 +204,7 @@ export function getReachableSpaces(board: BoardMap, fromId: string, steps: numbe
     frontier = next;
   }
   visited.delete(fromId);
-  return Array.from(visited).filter(sid => !occupied.has(sid));
+  return Array.from(visited);
 }
 
 export function canAttack(board: BoardMap, attacker: Fighter, defender: Fighter): boolean {

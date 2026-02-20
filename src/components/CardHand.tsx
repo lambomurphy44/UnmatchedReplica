@@ -1,12 +1,14 @@
 import React from 'react';
-import type { Card, CharacterDef } from '../game/types';
-import { getCardDef } from '../game/engine';
+import type { Card, CharacterDef, Fighter } from '../game/types';
+import { getCardDef, canFighterPlayCard } from '../game/engine';
 
 interface CardHandProps {
   hand: Card[];
   charDef: CharacterDef;
   onCardClick: (cardId: string) => void;
   filter?: 'attack' | 'defense' | 'scheme' | 'boost';
+  fighter?: Fighter;
+  aliveFighters?: Fighter[];
   label: string;
   hidden?: boolean;
 }
@@ -18,12 +20,14 @@ const TYPE_COLORS: Record<string, string> = {
   scheme: '#f9a825',
 };
 
-export const CardHand: React.FC<CardHandProps> = ({ hand, charDef, onCardClick, filter, label, hidden }) => {
+export const CardHand: React.FC<CardHandProps> = ({ hand, charDef, onCardClick, filter, fighter, aliveFighters, label, hidden }) => {
   const filteredCards = hand.map(card => ({
     card,
     def: getCardDef(card, charDef)!,
   })).filter(({ def }) => {
     if (!def) return false;
+    if (fighter && !canFighterPlayCard(fighter, def)) return false;
+    if (aliveFighters && !aliveFighters.some(f => canFighterPlayCard(f, def))) return false;
     if (!filter) return true;
     if (filter === 'attack') return def.type === 'attack' || def.type === 'versatile';
     if (filter === 'defense') return def.type === 'defense' || def.type === 'versatile';

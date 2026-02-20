@@ -294,6 +294,7 @@ export const Game: React.FC = () => {
   const opponentIndex = gameState.currentPlayer === 0 ? 1 : 0;
   const opponentPlayer = gameState.players[opponentIndex];
   const opponentCharDef = getCharDef(opponentPlayer.characterId);
+  const aliveFightersCurrent = gameState.fighters.filter(f => f.owner === gameState.currentPlayer && f.hp > 0);
   const placingPlayerName = gameState.placementPlayer !== null
     ? gameState.players[gameState.placementPlayer].name : '';
   const nextPlacementFighter = gameState.placementFighterIds.length > 0
@@ -424,6 +425,7 @@ export const Game: React.FC = () => {
       {gameState.phase === 'attack_selectCard' && (
         <div className="phase-prompt">
           <div className="phase-text">Select an attack card from your hand:</div>
+          <button className="skip-btn" onClick={() => pushState({ ...JSON.parse(JSON.stringify(gameState)), phase: 'playing', selectedFighter: null, combat: null })}>Cancel</button>
         </div>
       )}
 
@@ -550,34 +552,44 @@ export const Game: React.FC = () => {
 
       {/* Card hands */}
       <div className="hands-area">
-        {gameState.phase === 'attack_defenderCard' ? (
-          <CardHand
-            hand={opponentPlayer.hand}
-            charDef={opponentCharDef}
-            onCardClick={handleCardClick}
-            filter="defense"
-            label={`${opponentPlayer.name}'s Hand (Defense)`}
-          />
-        ) : gameState.phase === 'effect_opponentDiscard' ? (
+        {gameState.phase === 'attack_defenderCard' ? (() => {
+          const defender = gameState.combat ? getFighter(gameState, gameState.combat.defenderId) : undefined;
+          return (
+            <CardHand
+              hand={opponentPlayer.hand}
+              charDef={opponentCharDef}
+              onCardClick={handleCardClick}
+              filter="defense"
+              fighter={defender}
+              label={`${opponentPlayer.name}'s Hand (Defense)`}
+            />
+          );
+        })() : gameState.phase === 'effect_opponentDiscard' ? (
           <CardHand
             hand={opponentPlayer.hand}
             charDef={opponentCharDef}
             onCardClick={handleCardClick}
             label={`${opponentPlayer.name}'s Hand (Choose to discard)`}
           />
-        ) : (
-          <CardHand
-            hand={cp.hand}
-            charDef={charDef}
-            onCardClick={handleCardClick}
-            filter={
-              gameState.phase === 'attack_selectCard' ? 'attack' :
-              gameState.phase === 'scheme_selectCard' ? 'scheme' :
-              undefined
-            }
-            label={`${cp.name}'s Hand`}
-          />
-        )}
+        ) : (() => {
+          const attackerFighter = gameState.combat && gameState.phase === 'attack_selectCard'
+            ? getFighter(gameState, gameState.combat.attackerId) : undefined;
+          return (
+            <CardHand
+              hand={cp.hand}
+              charDef={charDef}
+              onCardClick={handleCardClick}
+              filter={
+                gameState.phase === 'attack_selectCard' ? 'attack' :
+                gameState.phase === 'scheme_selectCard' ? 'scheme' :
+                undefined
+              }
+              fighter={attackerFighter}
+              aliveFighters={gameState.phase === 'scheme_selectCard' ? aliveFightersCurrent : undefined}
+              label={`${cp.name}'s Hand`}
+            />
+          );
+        })()}
       </div>
     </div>
   );
