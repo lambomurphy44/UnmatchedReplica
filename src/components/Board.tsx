@@ -7,28 +7,67 @@ interface BoardProps {
   onSpaceClick: (spaceId: string) => void;
 }
 
+// Colorblind-friendly zone colors (Wong palette — distinguishable by deuteranopia/protanopia)
 const ZONE_COLORS: Record<string, string> = {
-  A: '#4a6741',
-  B: '#5c4a6d',
-  C: '#6d5a3a',
-  D: '#3a5a6d',
+  A: '#0077BB', // Blue   — Foyer
+  B: '#EE7733', // Orange — Library
+  C: '#CCBB44', // Yellow — Sanctum
+  D: '#882288', // Purple — Observatory
+  E: '#33BBEE', // Cyan   — Balcony
+};
+
+const ZONE_NAMES: Record<string, string> = {
+  A: 'Foyer',
+  B: 'Library',
+  C: 'Sanctum',
+  D: 'Observatory',
+  E: 'Balcony',
 };
 
 const CELL_SIZE = 80;
-const PADDING = 40;
+const PADDING = 50;
+const SPACE_R = 26;
 
 /** Map fighter to its portrait SVG path */
 function getPortrait(f: Fighter): string {
   if (f.characterId === 'king_arthur') {
     return f.isHero ? '/art/king_arthur.svg' : '/art/merlin.svg';
   }
-  // medusa
   return f.isHero ? '/art/medusa.svg' : '/art/harpy.svg';
 }
 
 /** Player border glow color */
 function getPlayerColor(owner: number): string {
   return owner === 0 ? '#4fc3f7' : '#ef5350';
+}
+
+/** Render a multi-zone space as pie slices for each zone */
+function renderZoneCircle(space: Space, cx: number, cy: number, r: number): React.ReactNode[] {
+  const { zones } = space;
+  if (zones.length === 1) {
+    return [
+      <circle key="fill" cx={cx} cy={cy} r={r} fill={ZONE_COLORS[zones[0]] || '#444'} />,
+    ];
+  }
+
+  // For 2-3 zones, draw equal pie slices
+  const slices: React.ReactNode[] = [];
+  const n = zones.length;
+  const startAngle = -Math.PI / 2; // start from top
+  for (let i = 0; i < n; i++) {
+    const a1 = startAngle + (i / n) * Math.PI * 2;
+    const a2 = startAngle + ((i + 1) / n) * Math.PI * 2;
+    const x1 = cx + r * Math.cos(a1);
+    const y1 = cy + r * Math.sin(a1);
+    const x2 = cx + r * Math.cos(a2);
+    const y2 = cy + r * Math.sin(a2);
+    const largeArc = (a2 - a1) > Math.PI ? 1 : 0;
+    const d = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+    slices.push(
+      <path key={`slice-${i}`} d={d} fill={ZONE_COLORS[zones[i]] || '#444'} />
+    );
+  }
+  return slices;
 }
 
 export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceClick }) => {
@@ -46,8 +85,21 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
   const fightersOnSpace = (spaceId: string): Fighter[] =>
     fighters.filter(f => f.spaceId === spaceId && f.hp > 0);
 
+  // Collect all unique zone letters for legend
+  const allZones = Array.from(new Set(board.spaces.flatMap(s => s.zones))).sort();
+
   return (
     <svg width={svgW} height={svgH} className="board-svg">
+      {/* Zone legend */}
+      {allZones.map((z, i) => (
+        <g key={`legend-${z}`} transform={`translate(${10 + i * 110}, ${svgH - 20})`}>
+          <rect x={0} y={-10} width={14} height={14} rx={3} fill={ZONE_COLORS[z] || '#444'} />
+          <text x={18} y={2} fill="#ccc" fontSize={11} fontWeight="bold">
+            {ZONE_NAMES[z] || z}
+          </text>
+        </g>
+      ))}
+
       {/* Edges */}
       {board.spaces.map(space =>
         space.adjacentIds.map(adjId => {
@@ -59,7 +111,7 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
             <line
               key={`${space.id}-${adjId}`}
               x1={a.cx} y1={a.cy} x2={b.cx} y2={b.cy}
-              stroke="#555" strokeWidth={2} opacity={0.5}
+              stroke="#666" strokeWidth={2.5} opacity={0.4}
             />
           );
         })
@@ -73,34 +125,33 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
 
         return (
           <g key={space.id} onClick={() => onSpaceClick(space.id)} style={{ cursor: isReachable ? 'pointer' : 'default' }}>
-            {/* Space circle */}
+            {/* Zone-colored fill (pie slices for multi-zone) */}
+            <g opacity={isReachable ? 1 : 0.75}>
+              {renderZoneCircle(space, cx, cy, SPACE_R)}
+            </g>
+
+            {/* Outline */}
             <circle
-              cx={cx} cy={cy} r={30}
-              fill={ZONE_COLORS[space.zone] || '#444'}
-              stroke={isReachable ? '#ffeb3b' : '#888'}
+              cx={cx} cy={cy} r={SPACE_R}
+              fill="none"
+              stroke={isReachable ? '#ffeb3b' : '#999'}
               strokeWidth={isReachable ? 3 : 1.5}
-              opacity={isReachable ? 1 : 0.8}
             />
-            {/* Zone label */}
-            <text x={cx} y={cy - 18} textAnchor="middle" fill="#aaa" fontSize={9}>
+
+            {/* Space ID label */}
+            <text x={cx} y={cy - SPACE_R - 4} textAnchor="middle" fill="#999" fontSize={8}>
               {space.id}
             </text>
 
             {/* Fighter portrait tokens */}
             {fOnSpace.map((f, i) => {
               const count = fOnSpace.length;
-              // Size: hero gets bigger token, sidekick smaller
               const r = f.isHero ? 14 : 10;
-              // Offset to avoid overlap when multiple fighters share adjacent spaces
-              // (shouldn't share same space, but handle display for edge cases)
               let offsetX = 0;
               let offsetY = 0;
-              if (count === 1) {
-                // Centered
-              } else if (count === 2) {
+              if (count === 2) {
                 offsetX = (i === 0 ? -10 : 10);
-              } else {
-                // 3+ fighters: spread in a triangle-ish pattern
+              } else if (count > 2) {
                 const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
                 offsetX = Math.cos(angle) * 12;
                 offsetY = Math.sin(angle) * 12;
@@ -113,36 +164,21 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
 
               return (
                 <g key={f.id}>
-                  {/* Player color ring (border) */}
-                  <circle
-                    cx={tx} cy={ty} r={r + 2}
-                    fill="none"
-                    stroke={color}
-                    strokeWidth={2.5}
-                  />
-                  {/* Dark background behind portrait */}
+                  <circle cx={tx} cy={ty} r={r + 2} fill="none" stroke={color} strokeWidth={2.5} />
                   <circle cx={tx} cy={ty} r={r} fill="#222" />
-                  {/* Portrait image clipped to circle */}
                   <clipPath id={`token-${f.id}`}>
                     <circle cx={tx} cy={ty} r={r} />
                   </clipPath>
                   <image
                     href={portrait}
-                    x={tx - r}
-                    y={ty - r}
-                    width={r * 2}
-                    height={r * 2}
+                    x={tx - r} y={ty - r}
+                    width={r * 2} height={r * 2}
                     clipPath={`url(#token-${f.id})`}
                     preserveAspectRatio="xMidYMid slice"
                   />
-                  {/* HP indicator (small number below token) */}
                   <text
-                    x={tx}
-                    y={ty + r + 10}
-                    textAnchor="middle"
-                    fill={color}
-                    fontSize={8}
-                    fontWeight="bold"
+                    x={tx} y={ty + r + 10}
+                    textAnchor="middle" fill={color} fontSize={8} fontWeight="bold"
                   >
                     {f.hp}/{f.maxHp}
                   </text>

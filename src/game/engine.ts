@@ -176,7 +176,8 @@ export function areAdjacent(board: BoardMap, spaceA: string, spaceB: string): bo
 export function sameZone(board: BoardMap, spaceA: string, spaceB: string): boolean {
   const sa = getSpace(board, spaceA);
   const sb = getSpace(board, spaceB);
-  return sa && sb ? sa.zone === sb.zone : false;
+  if (!sa || !sb) return false;
+  return sa.zones.some(z => sb.zones.includes(z));
 }
 
 export function isSpaceOccupied(state: GameState, spaceId: string, excludeFighterId?: string): boolean {
@@ -256,9 +257,9 @@ export function getValidPlacementSpaces(state: GameState, playerIndex: number): 
     : state.board.startPositions.player1[0];
   const heroSpace = getSpace(state.board, heroSpaceId);
   if (!heroSpace) return [];
-  const zone = heroSpace.zone;
+  const heroZones = heroSpace.zones;
   return state.board.spaces
-    .filter(s => s.zone === zone && !isSpaceOccupied(state, s.id))
+    .filter(s => s.zones.some(z => heroZones.includes(z)) && !isSpaceOccupied(state, s.id))
     .map(s => s.id);
 }
 
@@ -1385,8 +1386,9 @@ export function getReviveHarpySpaces(state: GameState): string[] {
   if (!hero) return [];
   const heroSpace = getSpace(state.board, hero.spaceId);
   if (!heroSpace) return [];
+  const heroZones = heroSpace.zones;
   return state.board.spaces
-    .filter(sp => sp.zone === heroSpace.zone && !isSpaceOccupied(state, sp.id, state.schemeMoveFighterId || undefined))
+    .filter(sp => sp.zones.some(z => heroZones.includes(z)) && !isSpaceOccupied(state, sp.id, state.schemeMoveFighterId || undefined))
     .map(sp => sp.id);
 }
 

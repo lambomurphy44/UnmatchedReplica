@@ -79,7 +79,7 @@ export interface Player {
 
 export interface Space {
   id: string;
-  zone: string;
+  zones: string[];
   x: number;
   y: number;
   adjacentIds: string[];
