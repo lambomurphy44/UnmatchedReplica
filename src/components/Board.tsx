@@ -33,6 +33,9 @@ function getPortrait(f: Fighter): string {
   if (f.characterId === 'king_arthur') {
     return f.isHero ? '/art/king_arthur.svg' : '/art/merlin.svg';
   }
+  if (f.characterId === 'aang') {
+    return f.isHero ? '/art/aang.svg' : '/art/appa.svg';
+  }
   return f.isHero ? '/art/medusa.svg' : '/art/harpy.svg';
 }
 

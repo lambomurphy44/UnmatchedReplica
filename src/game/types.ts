@@ -109,18 +109,23 @@ export type Phase =
   | 'effect_moveFighter'      // Post-combat: move a fighter
   | 'effect_opponentDiscard'  // Post-combat: opponent discards a card
   | 'effect_placeFighter'     // Post-combat: place fighter on any unoccupied space
+  | 'effect_pushFighter'      // Post-combat: push opposing fighter
+  | 'effect_chooseSearch'     // Meditate: choose a card from deck to add to hand
   | 'scheme_selectCard'
   | 'scheme_selectTarget'
   | 'scheme_moveSidekick'
   | 'scheme_moveAll'          // Winged Frenzy / Command: move all your fighters
   | 'scheme_reviveHarpy'      // Winged Frenzy: place revived harpy
+  | 'aang_charge_choice'      // Sky Bison Charge: choose move or damage
+  | 'aang_flying_bison_zone'  // Flying Bison: pick space in different zone
   | 'discard_excess'
   | 'gameOver';
 
 export interface QueuedEffect {
-  type: 'moveFighter' | 'opponentDiscard' | 'placeFighter';
+  type: 'moveFighter' | 'opponentDiscard' | 'placeFighter' | 'pushFighter';
   playerIndex: number;
   fighterId?: string;
+  targetFighterId?: string;  // for push: the fighter being pushed
   range?: number;
   label: string;
 }
@@ -136,6 +141,7 @@ export interface CombatState {
   defenderEffectsCancelled: boolean;
   damageDealt: number;
   attackerWon: boolean;
+  airScooterUsed: boolean;        // Aang: attacked from 1 space away via Air Scooter
 }
 
 export interface GameState {
@@ -168,4 +174,11 @@ export interface GameState {
 
   // Start-of-turn fighter positions (for Momentous Shift)
   turnStartSpaces: Record<string, string>;
+
+  // Aang-specific: push target fighter
+  pushTargetId: string | null;
+  pushRange: number;
+
+  // Aang-specific: deck search choices (Meditate)
+  searchCards: Card[];
 }

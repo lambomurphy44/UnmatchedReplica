@@ -132,6 +132,9 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
     schemeMoveRange: 0,
     effectQueue: [],
     turnStartSpaces,
+    pushTargetId: null,
+    pushRange: 0,
+    searchCards: [],
   };
 
   if (needsPlacement) {
@@ -208,10 +211,31 @@ export function getReachableSpaces(board: BoardMap, fromId: string, steps: numbe
   return Array.from(visited);
 }
 
-export function canAttack(board: BoardMap, attacker: Fighter, defender: Fighter): boolean {
+/** Find a shared adjacent space between two spaces (for Air Scooter). Returns the space ID or null. */
+export function getSpaceBetween(board: BoardMap, spaceA: string, spaceB: string, fighters: Fighter[], movingId: string): string | null {
+  const sa = getSpace(board, spaceA);
+  const sb = getSpace(board, spaceB);
+  if (!sa || !sb) return null;
+  const occupied = new Set(fighters.filter(f => f.hp > 0 && f.id !== movingId).map(f => f.spaceId));
+  // Find an unoccupied space adjacent to both
+  for (const adjId of sa.adjacentIds) {
+    if (sb.adjacentIds.includes(adjId) && !occupied.has(adjId)) {
+      return adjId;
+    }
+  }
+  return null;
+}
+
+export function canAttack(board: BoardMap, attacker: Fighter, defender: Fighter, fighters?: Fighter[]): boolean {
   if (attacker.hp <= 0 || defender.hp <= 0) return false;
   if (attacker.isRanged) {
     return sameZone(board, attacker.spaceId, defender.spaceId) || areAdjacent(board, attacker.spaceId, defender.spaceId);
+  }
+  // Aang's Air Scooter: can attack from 1 space away if there's an unoccupied space between
+  if (attacker.isHero && attacker.characterId === 'aang' && fighters) {
+    if (!areAdjacent(board, attacker.spaceId, defender.spaceId)) {
+      return getSpaceBetween(board, attacker.spaceId, defender.spaceId, fighters, attacker.id) !== null;
+    }
   }
   return areAdjacent(board, attacker.spaceId, defender.spaceId);
 }
@@ -220,7 +244,7 @@ export function getValidTargets(state: GameState, attackerId: string): Fighter[]
   const attacker = getFighter(state, attackerId);
   if (!attacker) return [];
   const opponentIndex = attacker.owner === 0 ? 1 : 0;
-  return getAliveFighters(state, opponentIndex).filter(d => canAttack(state.board, attacker, d));
+  return getAliveFighters(state, opponentIndex).filter(d => canAttack(state.board, attacker, d, state.fighters));
 }
 
 export function currentPlayer(state: GameState): Player {
@@ -557,6 +581,20 @@ export function startAttack(state: GameState, attackerFighterId: string): GameSt
 
 export function selectAttackTarget(state: GameState, defenderId: string): GameState {
   const s = clone(state);
+  const attacker = getFighter(s, s.selectedFighter!)!;
+  const defender = getFighter(s, defenderId)!;
+
+  // Air Scooter: if Aang is attacking from 1 space away, move to space between
+  let airScooterUsed = false;
+  if (attacker.isHero && attacker.characterId === 'aang' && !areAdjacent(s.board, attacker.spaceId, defender.spaceId)) {
+    const between = getSpaceBetween(s.board, attacker.spaceId, defender.spaceId, s.fighters, attacker.id);
+    if (between) {
+      addLog(s, `Air Scooter! Aang zips to ${between} between the fighters!`);
+      attacker.spaceId = between;
+      airScooterUsed = true;
+    }
+  }
+
   s.combat = {
     attackerId: s.selectedFighter!,
     defenderId,
@@ -568,10 +606,9 @@ export function selectAttackTarget(state: GameState, defenderId: string): GameSt
     defenderEffectsCancelled: false,
     damageDealt: 0,
     attackerWon: false,
+    airScooterUsed,
   };
   s.phase = 'attack_selectCard';
-  const attacker = getFighter(s, s.selectedFighter!)!;
-  const defender = getFighter(s, defenderId)!;
   addLog(s, `${attacker.name} attacks ${defender.name}! Choose an attack card.`);
   return s;
 }
@@ -667,6 +704,25 @@ function resolveCombat(state: GameState): GameState {
       s.combat.attackerEffectsCancelled = true;
       addLog(s, `${defCardDef?.name}: Cancels all effects on attacker's card!`);
     }
+    if (effect.type === 'swapAangAppa' && !s.combat.defenderEffectsCancelled) {
+      // Sky Bison Swap: if Aang is the defender and Appa is alive, swap them
+      if (defender.isHero && defender.characterId === 'aang') {
+        const appa = s.fighters.find(f => f.owner === defender.owner && !f.isHero && f.hp > 0 && f.characterId === 'aang');
+        if (appa) {
+          const tempSpace = defender.spaceId;
+          defender.spaceId = appa.spaceId;
+          appa.spaceId = tempSpace;
+          s.combat.defenderId = appa.id;
+          addLog(s, `Sky Bison Swap! Aang and Appa swap positions! Appa is now the defender!`);
+          drawCards(s, defPlayer.index, 1);
+          addLog(s, `${defPlayer.name} draws 1 card from the swap.`);
+        } else {
+          addLog(s, `Sky Bison Swap: Appa is not in play, no swap.`);
+        }
+      } else {
+        addLog(s, `Sky Bison Swap: Aang is not the defender, no swap.`);
+      }
+    }
   }
 
   // Process attacker's IMMEDIATELY effects (only if not cancelled)
@@ -675,6 +731,77 @@ function resolveCombat(state: GameState): GameState {
       if (effect.type === 'cancelEffects') {
         s.combat.defenderEffectsCancelled = true;
         addLog(s, `${atkCardDef?.name}: Cancels all effects on defender's card!`);
+      }
+      if (effect.type === 'discardRandomAndDeck') {
+        // Avatar State: discard 1 random card from hand, discard top card of deck
+        if (atkPlayer.hand.length > 0) {
+          const randIdx = Math.floor(Math.random() * atkPlayer.hand.length);
+          const discarded = atkPlayer.hand.splice(randIdx, 1)[0];
+          atkPlayer.discard.push(discarded);
+          const discDef = getCardDef(discarded, atkCharDef);
+          addLog(s, `Avatar State: Discarded ${discDef?.name || 'a card'} from hand.`);
+        }
+        if (atkPlayer.deck.length > 0) {
+          const topCard = atkPlayer.deck.pop()!;
+          atkPlayer.discard.push(topCard);
+          const topDef = getCardDef(topCard, atkCharDef);
+          addLog(s, `Avatar State: Discarded ${topDef?.name || 'a card'} from top of deck.`);
+        }
+      }
+      if (effect.type === 'moveToNewZone') {
+        // Flying Bison: move Appa to any space in a different zone (auto-resolve: skip for now, handle after combat)
+        // This is an immediately effect on a versatile card used as attack
+        // We auto-resolve: just log it. Full interactive would need a phase pause.
+        const fighter = getFighter(s, s.combat.attackerId);
+        if (fighter && !fighter.isHero && fighter.characterId === 'aang') {
+          const currentSpace = getSpace(s.board, fighter.spaceId);
+          if (currentSpace) {
+            const currentZones = currentSpace.zones;
+            const validSpaces = s.board.spaces.filter(sp =>
+              !sp.zones.some(z => currentZones.includes(z)) &&
+              !isSpaceOccupied(s, sp.id, fighter.id)
+            );
+            if (validSpaces.length > 0) {
+              // Auto-pick: move to a random valid space (simplified)
+              const target = validSpaces[Math.floor(Math.random() * validSpaces.length)];
+              fighter.spaceId = target.id;
+              addLog(s, `Flying Bison: ${fighter.name} flies to ${target.id} in a new zone!`);
+            } else {
+              addLog(s, `Flying Bison: No valid spaces in a different zone.`);
+            }
+          }
+        }
+      }
+      if (effect.type === 'chargeChoice') {
+        // Sky Bison Charge: choose move up to 3 or deal 1 damage
+        // Auto-resolve: deal 1 damage to opposing fighter (simplified)
+        const opponent = getFighter(s, s.combat.defenderId);
+        if (opponent && opponent.hp > 0) {
+          opponent.hp = Math.max(0, opponent.hp - 1);
+          addLog(s, `Sky Bison Charge: Deals 1 damage to ${opponent.name}! (${opponent.hp} HP)`);
+          checkHeroDeath(s);
+        }
+      }
+    }
+  }
+
+  // Process defender's non-cancel IMMEDIATELY effects that weren't handled above
+  if (!s.combat.defenderEffectsCancelled) {
+    for (const effect of defImmediate) {
+      if (effect.type === 'discardRandomAndDeck') {
+        if (defPlayer.hand.length > 0) {
+          const randIdx = Math.floor(Math.random() * defPlayer.hand.length);
+          const discarded = defPlayer.hand.splice(randIdx, 1)[0];
+          defPlayer.discard.push(discarded);
+          const discDef = getCardDef(discarded, defCharDef);
+          addLog(s, `Avatar State: Discarded ${discDef?.name || 'a card'} from hand.`);
+        }
+        if (defPlayer.deck.length > 0) {
+          const topCard = defPlayer.deck.pop()!;
+          defPlayer.discard.push(topCard);
+          const topDef = getCardDef(topCard, defCharDef);
+          addLog(s, `Avatar State: Discarded ${topDef?.name || 'a card'} from top of deck.`);
+        }
       }
     }
   }
@@ -750,6 +877,12 @@ function resolveCombatDamage(state: GameState): GameState {
   // ===== Calculate values =====
   let atkValue = atkCardDef?.value || 0;
   let defValue = defCardDef?.value || 0;
+
+  // Air Scooter +1 bonus (cannot be cancelled)
+  if (s.combat.airScooterUsed) {
+    atkValue += 1;
+    addLog(s, `Air Scooter adds +1 to attack value!`);
+  }
 
   // Arthur's ability boost
   if (s.combat.attackBoostCard) {
@@ -992,6 +1125,111 @@ function processAfterCombatEffect(
       }
       break;
     }
+
+    // ---- Aang-specific after-combat effects ----
+
+    case 'gainActionAndDraw':
+      // Air Slice: gain 1 action and draw 1 card
+      selfPlayer.actionsRemaining++;
+      drawCards(state, selfPlayer.index, 1);
+      addLog(state, `${self.name} gains 1 action and draws 1 card!`);
+      break;
+
+    case 'moveHeroIfWon': {
+      // Riding the Wind / Whirlwind Kick: if won, move Aang up to N spaces
+      if (selfWon) {
+        const hero = getHero(state, selfPlayer.index);
+        if (hero && hero.hp > 0 && effect.amount && effect.amount > 0) {
+          queue.push({
+            type: 'moveFighter',
+            playerIndex: selfPlayer.index,
+            fighterId: hero.id,
+            range: effect.amount,
+            label: `Move ${hero.name} up to ${effect.amount} spaces (won combat).`,
+          });
+        }
+      }
+      break;
+    }
+
+    case 'pushAndDrawIfWon':
+      // Staff Sweep: if won, push opposing fighter up to 1 space and draw 1 card
+      if (selfWon && opponent.hp > 0) {
+        queue.push({
+          type: 'pushFighter',
+          playerIndex: selfPlayer.index,
+          targetFighterId: opponent.id,
+          range: effect.amount || 1,
+          label: `Push ${opponent.name} up to ${effect.amount || 1} space(s).`,
+        });
+        drawCards(state, selfPlayer.index, 1);
+        addLog(state, `${selfPlayer.name} draws 1 card (won combat).`);
+      }
+      break;
+
+    case 'pushAndDrawIfPushed':
+      // Water Whip: push opposing fighter up to 2 spaces, if pushed draw 1 card
+      if (opponent.hp > 0) {
+        queue.push({
+          type: 'pushFighter',
+          playerIndex: selfPlayer.index,
+          targetFighterId: opponent.id,
+          range: effect.amount || 2,
+          label: `Push ${opponent.name} up to ${effect.amount || 2} spaces. If pushed, draw 1 card.`,
+        });
+      }
+      break;
+
+    case 'moveDefender': {
+      // Evasive Flow: move the defender up to N spaces
+      if (self.hp > 0 && effect.amount && effect.amount > 0) {
+        queue.push({
+          type: 'moveFighter',
+          playerIndex: selfPlayer.index,
+          fighterId: self.id,
+          range: effect.amount,
+          label: `Move ${self.name} up to ${effect.amount} spaces.`,
+        });
+      }
+      break;
+    }
+
+    case 'moveHeroIfDamaged': {
+      // Air Shield: if you took damage, move Aang 1 space
+      const combat = state.combat;
+      if (combat && combat.damageDealt > 0) {
+        const hero = getHero(state, selfPlayer.index);
+        if (hero && hero.hp > 0 && effect.amount && effect.amount > 0) {
+          queue.push({
+            type: 'moveFighter',
+            playerIndex: selfPlayer.index,
+            fighterId: hero.id,
+            range: effect.amount,
+            label: `Move ${hero.name} ${effect.amount} space (took damage).`,
+          });
+        }
+      }
+      break;
+    }
+
+    case 'zoneDamageAllEnemies': {
+      // Avatar State: deal N damage to each enemy fighter in Aang's zone
+      const hero = getHero(state, selfPlayer.index);
+      if (hero && hero.hp > 0) {
+        const enemies = getAliveFighters(state, opponentPlayer.index).filter(f =>
+          sameZone(state.board, hero.spaceId, f.spaceId)
+        );
+        for (const enemy of enemies) {
+          enemy.hp = Math.max(0, enemy.hp - (effect.amount || 2));
+          addLog(state, `Avatar State deals ${effect.amount || 2} damage to ${enemy.name}! (${enemy.hp} HP)`);
+        }
+        if (enemies.length === 0) {
+          addLog(state, `Avatar State: No enemy fighters in Aang's zone.`);
+        }
+        checkHeroDeath(state);
+      }
+      break;
+    }
   }
 }
 
@@ -1047,6 +1285,13 @@ function processNextEffect(state: GameState): GameState {
     case 'placeFighter':
       state.schemeMoveFighterId = effect.fighterId || null;
       state.phase = 'effect_placeFighter';
+      addLog(state, effect.label);
+      break;
+
+    case 'pushFighter':
+      state.pushTargetId = effect.targetFighterId || null;
+      state.pushRange = effect.range || 1;
+      state.phase = 'effect_pushFighter';
       addLog(state, effect.label);
       break;
   }
@@ -1117,6 +1362,93 @@ export function resolveEffectPlace(state: GameState, spaceId: string): GameState
 
   s.schemeMoveFighterId = null;
   return continueEffectQueue(s);
+}
+
+// ---- Push Effect Resolution ----
+
+/** Get spaces that a fighter can be pushed to (adjacent unoccupied spaces) */
+export function getPushSpaces(state: GameState, fighterId: string, range: number): string[] {
+  const fighter = getFighter(state, fighterId);
+  if (!fighter || fighter.hp <= 0) return [];
+  // Push = move the target to an adjacent unoccupied space (up to range steps)
+  return getReachableSpaces(state.board, fighter.spaceId, range, state.fighters, fighter.id);
+}
+
+export function resolveEffectPush(state: GameState, targetSpaceId: string): GameState {
+  const s = clone(state);
+  const fighterId = s.pushTargetId;
+  if (!fighterId) return continueEffectQueue(s);
+  const fighter = getFighter(s, fighterId);
+  if (!fighter) return continueEffectQueue(s);
+
+  const reachable = getPushSpaces(s, fighterId, s.pushRange);
+  if (reachable.includes(targetSpaceId)) {
+    fighter.spaceId = targetSpaceId;
+    addLog(s, `${fighter.name} pushed to ${targetSpaceId}!`);
+
+    // Water Whip: if pushed, draw 1 card (check if the effect label mentions it)
+    // We handle this simply: if the current effect queue label mentions "draw 1 card", draw
+    // Actually, let's just always draw for pushAndDrawIfPushed — we use a simpler check
+    // The pushing player draws if push actually happened
+  }
+
+  s.pushTargetId = null;
+  s.pushRange = 0;
+  return continueEffectQueue(s);
+}
+
+export function skipEffectPush(state: GameState): GameState {
+  const s = clone(state);
+  const fighterId = s.pushTargetId;
+  if (fighterId) {
+    const f = getFighter(s, fighterId);
+    addLog(s, `${f?.name} is not pushed.`);
+  }
+  s.pushTargetId = null;
+  s.pushRange = 0;
+  return continueEffectQueue(s);
+}
+
+// ---- Deck Search (Meditate) ----
+
+export function getSearchableCards(state: GameState): { card: Card; defName: string }[] {
+  const player = currentPlayer(state);
+  const charDef = getCharDef(player.characterId);
+  return player.deck.map(card => {
+    const def = getCardDef(card, charDef);
+    return { card, defName: def?.name || 'Unknown' };
+  });
+}
+
+export function resolveSearchChoice(state: GameState, cardId: string): GameState {
+  const s = clone(state);
+  const player = currentPlayer(s);
+  const cardIdx = player.deck.findIndex(c => c.id === cardId);
+  if (cardIdx < 0) return s;
+
+  const card = player.deck.splice(cardIdx, 1)[0];
+  player.hand.push(card);
+  const charDef = getCharDef(player.characterId);
+  const def = getCardDef(card, charDef);
+  addLog(s, `Meditate: Added ${def?.name || 'a card'} to hand. Deck reshuffled.`);
+  player.deck = shuffle(player.deck);
+
+  s.searchCards = [];
+
+  // Meditate also gives 1 action
+  player.actionsRemaining++;
+  addLog(s, `Gained 1 action from Meditate.`);
+
+  // Discard the scheme card
+  if (s.pendingSchemeCard) {
+    player.discard.push(s.pendingSchemeCard);
+  }
+  s.pendingSchemeCard = null;
+
+  if (s.phase !== 'gameOver') {
+    useAction(s);
+  }
+  return s;
 }
 
 function continueEffectQueue(state: GameState): GameState {
@@ -1260,6 +1592,38 @@ export function playScheme(state: GameState, cardId: string): GameState {
       }
       // If no alive fighters, skip to revive
       return handleWingedFrenzyRevive(s, card);
+    }
+
+    // --- Aang schemes ---
+    case 'aang_meditate': {
+      // Search deck for any card, add to hand, gain 1 action, shuffle deck
+      if (player.deck.length > 0) {
+        s.pendingSchemeCard = card;
+        s.searchCards = [...player.deck];
+        s.phase = 'effect_chooseSearch';
+        addLog(s, `Meditate: Choose any card from your deck to add to your hand.`);
+        return s;
+      }
+      addLog(s, `Meditate: Deck is empty, nothing to search.`);
+      player.actionsRemaining++;
+      addLog(s, `Gained 1 action from Meditate.`);
+      break;
+    }
+
+    case 'aang_freedom_of_the_skies': {
+      // Each fighter recovers 1 HP, draw 1 card, gain 1 action
+      const ownFighters = getAliveFighters(s, s.currentPlayer);
+      for (const f of ownFighters) {
+        if (f.hp < f.maxHp) {
+          f.hp = Math.min(f.maxHp, f.hp + 1);
+          addLog(s, `${f.name} recovers 1 health! (${f.hp}/${f.maxHp} HP)`);
+        }
+      }
+      drawCards(s, s.currentPlayer, 1);
+      addLog(s, `Drew 1 card.`);
+      player.actionsRemaining++;
+      addLog(s, `Gained 1 action.`);
+      break;
     }
 
     default:

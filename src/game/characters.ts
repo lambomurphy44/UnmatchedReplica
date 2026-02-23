@@ -363,6 +363,211 @@ const medusaCards: CardDef[] = [
 ];
 
 // =============================================
+// AANG (with Appa) — 30 cards
+// =============================================
+
+const aangCards: CardDef[] = [
+  // ---- Hero (Aang only) ----
+  {
+    id: 'aang_whirlwind_kick',
+    name: 'Whirlwind Kick',
+    type: 'attack',
+    value: 3,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 3,
+    effects: [
+      { type: 'pushIfMoved', timing: 'duringCombat', amount: 1 },
+      { type: 'moveHeroIfWon', timing: 'afterCombat', amount: 2 },
+    ],
+    effectText: 'DURING COMBAT: If Aang moved this turn, you may push the defender up to 1 space. AFTER COMBAT: If you won, move Aang up to 2 spaces.',
+  },
+  {
+    id: 'aang_air_slice',
+    name: 'Air Slice',
+    type: 'attack',
+    value: 2,
+    boost: 1,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'gainActionAndDraw', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: Gain 1 action and draw 1 card.',
+  },
+  {
+    id: 'aang_staff_sweep',
+    name: 'Staff Sweep',
+    type: 'versatile',
+    value: 4,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'pushAndDrawIfWon', timing: 'afterCombat', amount: 1 },
+    ],
+    effectText: 'AFTER COMBAT: If you won the combat, push the opposing fighter up to 1 space and draw 1 card.',
+  },
+  {
+    id: 'aang_riding_the_wind',
+    name: 'Riding the Wind',
+    type: 'attack',
+    value: 5,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'moveHeroIfWon', timing: 'afterCombat', amount: 2 },
+    ],
+    effectText: 'AFTER COMBAT: If you won, move Aang up to 2 spaces.',
+  },
+  {
+    id: 'aang_avatar_state',
+    name: 'Avatar State',
+    type: 'attack',
+    value: 7,
+    boost: 4,
+    restriction: 'hero',
+    quantity: 1,
+    effects: [
+      { type: 'discardRandomAndDeck', timing: 'immediately' },
+      { type: 'zoneDamageAllEnemies', timing: 'afterCombat', amount: 2 },
+    ],
+    effectText: 'IMMEDIATELY: Discard 1 random card from your hand. Discard the top card of your deck. AFTER COMBAT: Deal 2 damage to each enemy fighter in Aang\'s zone.',
+  },
+  {
+    id: 'aang_stone_wall',
+    name: 'Stone Wall',
+    type: 'versatile',
+    value: 4,
+    boost: 3,
+    restriction: 'hero',
+    quantity: 1,
+    effects: [
+      { type: 'dealDamageIfWon', timing: 'afterCombat', amount: 1 },
+    ],
+    effectText: 'AFTER COMBAT: If you won the combat, deal 1 damage to the opposing fighter.',
+  },
+  {
+    id: 'aang_water_whip',
+    name: 'Water Whip',
+    type: 'versatile',
+    value: 2,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 3,
+    effects: [
+      { type: 'pushAndDrawIfPushed', timing: 'afterCombat', amount: 2 },
+    ],
+    effectText: 'AFTER COMBAT: You may push the opposing fighter up to 2 spaces. If you pushed the opposing fighter, draw 1 card.',
+  },
+  {
+    id: 'aang_elemental_counter',
+    name: 'Elemental Counter',
+    type: 'defense',
+    value: 3,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'cancelEffects', timing: 'immediately' },
+    ],
+    effectText: "IMMEDIATELY: Cancel all effects on your opponent's card.",
+  },
+  {
+    id: 'aang_meditate',
+    name: 'Meditate',
+    type: 'scheme',
+    value: 0,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [],
+    effectText: 'Search your deck for any card to add to your hand and gain 1 action. Shuffle your deck.',
+  },
+
+  // ---- Sidekick (Appa only) ----
+  {
+    id: 'aang_flying_bison',
+    name: 'Flying Bison',
+    type: 'versatile',
+    value: 4,
+    boost: 3,
+    restriction: 'sidekick',
+    quantity: 2,
+    effects: [
+      { type: 'moveToNewZone', timing: 'immediately' },
+    ],
+    effectText: 'IMMEDIATELY: Move Appa to any space in a different zone not shared with his current zone.',
+  },
+  {
+    id: 'aang_sky_bison_charge',
+    name: 'Sky Bison Charge',
+    type: 'versatile',
+    value: 4,
+    boost: 2,
+    restriction: 'sidekick',
+    quantity: 2,
+    effects: [
+      { type: 'chargeChoice', timing: 'immediately', amount: 3 },
+    ],
+    effectText: 'IMMEDIATELY: Choose one — move Appa up to 3 spaces or deal 1 damage to the opposing fighter.',
+  },
+
+  // ---- Any fighter ----
+  {
+    id: 'aang_evasive_flow',
+    name: 'Evasive Flow',
+    type: 'defense',
+    value: 3,
+    boost: 3,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'moveDefender', timing: 'afterCombat', amount: 2 },
+    ],
+    effectText: 'AFTER COMBAT: You may move the defender up to 2 spaces.',
+  },
+  {
+    id: 'aang_air_shield',
+    name: 'Air Shield',
+    type: 'defense',
+    value: 3,
+    boost: 2,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'moveHeroIfDamaged', timing: 'afterCombat', amount: 1 },
+    ],
+    effectText: 'AFTER COMBAT: If you took damage, move Aang 1 space.',
+  },
+  {
+    id: 'aang_sky_bison_swap',
+    name: 'Sky Bison Swap',
+    type: 'defense',
+    value: 3,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'swapAangAppa', timing: 'immediately' },
+    ],
+    effectText: 'IMMEDIATELY: If Aang is the defender and Appa is in play, swap Aang and Appa. Appa becomes the defending fighter. If you swapped, draw 1 card.',
+  },
+  {
+    id: 'aang_freedom_of_the_skies',
+    name: 'Freedom of the Skies',
+    type: 'scheme',
+    value: 0,
+    boost: 3,
+    restriction: 'any',
+    quantity: 1,
+    effects: [],
+    effectText: 'Your fighters each recover 1 health. Draw 1 card. Gain 1 action.',
+  },
+];
+
+// =============================================
 // Character Definitions
 // =============================================
 
@@ -408,4 +613,25 @@ export const MEDUSA: CharacterDef = {
   },
 };
 
-export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA];
+export const AANG: CharacterDef = {
+  id: 'aang',
+  name: 'Aang',
+  hp: 12,
+  isRanged: false,
+  moveValue: 3,
+  sidekick: {
+    name: 'Appa',
+    hp: 8,
+    isRanged: false,
+    moveValue: 3,
+    quantity: 1,
+  },
+  deckCards: aangCards,
+  ability: {
+    name: 'Air Scooter',
+    description: 'Aang may declare an attack from one space away from the defending fighter. If you do, move Aang into the space between the fighters. During combat, if you moved Aang this way, add +1 to your attack value. (This ability cannot be cancelled.)',
+    timing: 'duringAttack',
+  },
+};
+
+export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA, AANG];

@@ -9,6 +9,8 @@ import {
   selectArthurBoostCard,
   selectDuringCombatBoost,
   resolveEffectMove, skipEffectMove, resolveEffectDiscard, resolveEffectPlace,
+  resolveEffectPush, skipEffectPush, getPushSpaces,
+  resolveSearchChoice, getSearchableCards,
   getEffectMoveSpaces, getPlaceFighterSpaces,
   playScheme, getSchemeTargets, resolveSchemeTarget,
   resolveSchemeSidekickMove, skipSchemeSidekickMove,
@@ -145,6 +147,12 @@ export const Game: React.FC = () => {
       pushState(resolveReviveHarpy(gameState, spaceId));
       return;
     }
+
+    // Post-combat effect: push fighter
+    if (gameState.phase === 'effect_pushFighter') {
+      pushState(resolveEffectPush(gameState, spaceId));
+      return;
+    }
   }, [gameState, pushState]);
 
   const handleCardClick = useCallback((cardId: string) => {
@@ -188,6 +196,12 @@ export const Game: React.FC = () => {
     // Post-combat: opponent discard
     if (gameState.phase === 'effect_opponentDiscard') {
       pushState(resolveEffectDiscard(gameState, cardId));
+      return;
+    }
+
+    // Meditate: search deck for card
+    if (gameState.phase === 'effect_chooseSearch') {
+      pushState(resolveSearchChoice(gameState, cardId));
       return;
     }
   }, [gameState, pushState]);
@@ -249,6 +263,11 @@ export const Game: React.FC = () => {
     // Scheme: revive harpy
     if (gameState.phase === 'scheme_reviveHarpy') {
       return getReviveHarpySpaces(gameState);
+    }
+
+    // Post-combat effect: push fighter
+    if (gameState.phase === 'effect_pushFighter' && gameState.pushTargetId) {
+      return getPushSpaces(gameState, gameState.pushTargetId, gameState.pushRange);
     }
 
     return [];
@@ -533,6 +552,28 @@ export const Game: React.FC = () => {
         );
       })()}
 
+      {gameState.phase === 'effect_pushFighter' && (() => {
+        const f = gameState.pushTargetId ? getFighter(gameState, gameState.pushTargetId) : null;
+        return (
+          <div className="phase-prompt">
+            <div className="phase-text">
+              Push {f?.name} up to {gameState.pushRange} space(s) - click a highlighted space, or skip.
+            </div>
+            <button className="skip-btn" onClick={() => pushState(skipEffectPush(gameState))}>
+              Skip Push
+            </button>
+          </div>
+        );
+      })()}
+
+      {gameState.phase === 'effect_chooseSearch' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Meditate: Choose a card from your deck to add to your hand.
+          </div>
+        </div>
+      )}
+
       {gameState.phase === 'discard_excess' && (
         <div className="phase-prompt">
           <div className="phase-text">
@@ -570,6 +611,13 @@ export const Game: React.FC = () => {
             charDef={opponentCharDef}
             onCardClick={handleCardClick}
             label={`${opponentPlayer.name}'s Hand (Choose to discard)`}
+          />
+        ) : gameState.phase === 'effect_chooseSearch' ? (
+          <CardHand
+            hand={gameState.searchCards}
+            charDef={charDef}
+            onCardClick={handleCardClick}
+            label={`${cp.name}'s Deck (Choose a card)`}
           />
         ) : (() => {
           const attackerFighter = gameState.combat && gameState.phase === 'attack_selectCard'
