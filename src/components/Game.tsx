@@ -3,34 +3,30 @@ import type { GameState } from '../game/types';
 import {
   createGame, currentPlayer, getCharDef, getFighter,
   getValidTargets, getReachableSpaces,
-  startManeuver, applyManeuverBoost, selectManeuverFighter,
-  executeManeuverMove, skipFighterMove, skipAllManeuverMoves,
-  startAttack, selectAttackTarget, selectAttackCard, selectDefenseCard,
-  selectArthurBoostCard,
-  selectDuringCombatBoost,
-  resolveEffectMove, skipEffectMove, resolveEffectDiscard, resolveEffectPlace,
-  resolveEffectPush, skipEffectPush, getPushSpaces,
-  resolveSearchChoice, getSearchableCards,
   getEffectMoveSpaces, getPlaceFighterSpaces,
-  playScheme, getSchemeTargets, resolveSchemeTarget,
-  resolveSchemeSidekickMove, skipSchemeSidekickMove,
-  selectSchemeMoveAllFighter, executeSchemeMoveAllMove,
-  skipSchemeMoveAllFighter, skipAllSchemeMoveAll,
-  getReviveHarpySpaces, resolveReviveHarpy,
-  discardExcessCard,
-  useMedusaGaze, skipMedusaGaze, getMedusaGazeTargets,
-  placeSidekick, getValidPlacementSpaces,
+  getPushSpaces,
+  getMedusaGazeTargets,
+  getSchemeTargets,
+  getReviveHarpySpaces,
+  getValidPlacementSpaces,
 } from '../game/engine';
+import { dispatchAction } from '../game/dispatch';
 import { Board } from './Board';
 import { CardHand } from './CardHand';
 import { PlayerHUD } from './PlayerHUD';
 import { ActionBar } from './ActionBar';
 import { GameLog } from './GameLog';
 import { ALL_CHARACTERS } from '../game/characters';
+import { useOnlineGame } from '../hooks/useOnlineGame';
+
+type AppMode = 'menu' | 'local' | 'online_lobby' | 'online_game';
 
 const MAX_HISTORY = 50;
 
 export const Game: React.FC = () => {
+  const [mode, setMode] = useState<AppMode>('menu');
+
+  // ---- Local game state ----
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [stateHistory, setStateHistory] = useState<GameState[]>([]);
 
@@ -39,6 +35,16 @@ export const Game: React.FC = () => {
   const [p0Name, setP0Name] = useState('Player 1');
   const [p1Name, setP1Name] = useState('Player 2');
 
+  // ---- Online game state ----
+  const online = useOnlineGame();
+  const [lobbyChar, setLobbyChar] = useState('king_arthur');
+  const [lobbyName, setLobbyName] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+
+  // Effective game state (local or online)
+  const gs: GameState | null = mode === 'online_game' ? online.gameState : gameState;
+
+  // ---- Local state management ----
   const pushState = useCallback((newState: GameState) => {
     setGameState(prev => {
       if (prev) {
@@ -58,228 +64,373 @@ export const Game: React.FC = () => {
     setGameState(prev);
   }, [stateHistory]);
 
-  const startGame = () => {
+  const startLocalGame = () => {
     setStateHistory([]);
     setGameState(createGame(p0Char, p1Char, p0Name, p1Name));
+    setMode('local');
   };
 
-  // ---- Handlers ----
+  // ---- Unified dispatch ----
+  // In local mode, applies directly. In online mode, sends to server.
+  const act = useCallback((actionType: string, args: Record<string, unknown> = {}) => {
+    if (mode === 'online_game') {
+      online.sendAction(actionType, args);
+    } else {
+      if (!gameState) return;
+      const newState = dispatchAction(gameState, actionType, args);
+      if (newState) pushState(newState);
+    }
+  }, [mode, gameState, pushState, online]);
+
+  // ---- Online interaction control ----
+  // Determines if the local player can interact in the current phase
+  const canInteract = (() => {
+    if (mode !== 'online_game') return true; // local mode: always interactive
+    if (!gs || online.playerIndex === null) return false;
+
+    const myIndex = online.playerIndex;
+
+    // Placement phase: only the placing player can interact
+    if (gs.phase === 'place_sidekick') {
+      return gs.placementPlayer === myIndex;
+    }
+
+    // Defender phases: the opponent of the current player interacts
+    if (gs.phase === 'attack_defenderCard' || gs.phase === 'effect_opponentDiscard') {
+      return gs.currentPlayer !== myIndex; // defender = opponent of current player
+    }
+
+    // All other phases: the current player interacts
+    return gs.currentPlayer === myIndex;
+  })();
+
+  // ---- Handlers (unified) ----
 
   const handleManeuver = useCallback(() => {
-    if (!gameState) return;
-    pushState(startManeuver(gameState));
-  }, [gameState, pushState]);
+    act('startManeuver');
+  }, [act]);
 
   const handleStartAttack = useCallback((fighterId: string) => {
-    if (!gameState) return;
-    pushState(startAttack(gameState, fighterId));
-  }, [gameState, pushState]);
+    act('startAttack', { fighterId });
+  }, [act]);
 
   const handleStartScheme = useCallback(() => {
-    if (!gameState) return;
-    pushState({ ...JSON.parse(JSON.stringify(gameState)), phase: 'scheme_selectCard' });
-  }, [gameState, pushState]);
+    act('startScheme');
+  }, [act]);
 
   const handleSpaceClick = useCallback((spaceId: string) => {
-    if (!gameState) return;
+    if (!gs || !canInteract) return;
 
-    if (gameState.phase === 'place_sidekick') {
-      pushState(placeSidekick(gameState, spaceId));
+    if (gs.phase === 'place_sidekick') {
+      act('placeSidekick', { spaceId });
       return;
     }
-
-    if (gameState.phase === 'maneuver_moveFighter') {
-      // Could be from maneuver OR from scheme_moveAll (reusing this phase)
-      if (gameState.pendingSchemeCard) {
-        pushState(executeSchemeMoveAllMove(gameState, spaceId));
+    if (gs.phase === 'maneuver_moveFighter') {
+      if (gs.pendingSchemeCard) {
+        act('executeSchemeMoveAllMove', { spaceId });
       } else {
-        pushState(executeManeuverMove(gameState, spaceId));
+        act('executeManeuverMove', { spaceId });
       }
       return;
     }
-
-    if (gameState.phase === 'attack_selectTarget') {
-      const targets = getValidTargets(gameState, gameState.selectedFighter!);
+    if (gs.phase === 'attack_selectTarget') {
+      const targets = getValidTargets(gs, gs.selectedFighter!);
       const targetOnSpace = targets.find(t => t.spaceId === spaceId);
       if (targetOnSpace) {
-        pushState(selectAttackTarget(gameState, targetOnSpace.id));
+        act('selectAttackTarget', { defenderId: targetOnSpace.id });
       }
       return;
     }
-
-    if (gameState.phase === 'scheme_selectTarget') {
-      const targets = getSchemeTargets(gameState);
+    if (gs.phase === 'scheme_selectTarget') {
+      const targets = getSchemeTargets(gs);
       const targetOnSpace = targets.find(t => t.spaceId === spaceId);
       if (targetOnSpace) {
-        pushState(resolveSchemeTarget(gameState, targetOnSpace.id));
+        act('resolveSchemeTarget', { targetFighterId: targetOnSpace.id });
       }
       return;
     }
-
-    if (gameState.phase === 'scheme_moveSidekick') {
-      pushState(resolveSchemeSidekickMove(gameState, spaceId));
+    if (gs.phase === 'scheme_moveSidekick') {
+      act('resolveSchemeSidekickMove', { spaceId });
       return;
     }
-
-    if (gameState.phase === 'medusa_startAbility') {
-      const targets = getMedusaGazeTargets(gameState);
+    if (gs.phase === 'medusa_startAbility') {
+      const targets = getMedusaGazeTargets(gs);
       const targetOnSpace = targets.find(t => t.spaceId === spaceId);
       if (targetOnSpace) {
-        pushState(useMedusaGaze(gameState, targetOnSpace.id));
+        act('useMedusaGaze', { targetFighterId: targetOnSpace.id });
       }
       return;
     }
-
-    // Post-combat effect: move fighter
-    if (gameState.phase === 'effect_moveFighter') {
-      pushState(resolveEffectMove(gameState, spaceId));
+    if (gs.phase === 'effect_moveFighter') {
+      act('resolveEffectMove', { spaceId });
       return;
     }
-
-    // Post-combat effect: place fighter anywhere
-    if (gameState.phase === 'effect_placeFighter') {
-      pushState(resolveEffectPlace(gameState, spaceId));
+    if (gs.phase === 'effect_placeFighter') {
+      act('resolveEffectPlace', { spaceId });
       return;
     }
-
-    // Scheme: revive harpy placement
-    if (gameState.phase === 'scheme_reviveHarpy') {
-      pushState(resolveReviveHarpy(gameState, spaceId));
+    if (gs.phase === 'scheme_reviveHarpy') {
+      act('resolveReviveHarpy', { spaceId });
       return;
     }
-
-    // Post-combat effect: push fighter
-    if (gameState.phase === 'effect_pushFighter') {
-      pushState(resolveEffectPush(gameState, spaceId));
+    if (gs.phase === 'effect_pushFighter') {
+      act('resolveEffectPush', { spaceId });
       return;
     }
-  }, [gameState, pushState]);
+  }, [gs, canInteract, act]);
 
   const handleCardClick = useCallback((cardId: string) => {
-    if (!gameState) return;
+    if (!gs || !canInteract) return;
 
-    if (gameState.phase === 'maneuver_boost') {
-      pushState(applyManeuverBoost(gameState, cardId));
+    if (gs.phase === 'maneuver_boost') {
+      act('applyManeuverBoost', { cardId });
       return;
     }
-
-    if (gameState.phase === 'attack_selectCard') {
-      pushState(selectAttackCard(gameState, cardId));
+    if (gs.phase === 'attack_selectCard') {
+      act('selectAttackCard', { cardId });
       return;
     }
-
-    if (gameState.phase === 'arthur_attackBoost') {
-      pushState(selectArthurBoostCard(gameState, cardId));
+    if (gs.phase === 'arthur_attackBoost') {
+      act('selectArthurBoostCard', { cardId });
       return;
     }
-
-    if (gameState.phase === 'combat_duringBoost') {
-      pushState(selectDuringCombatBoost(gameState, cardId));
+    if (gs.phase === 'combat_duringBoost') {
+      act('selectDuringCombatBoost', { cardId });
       return;
     }
-
-    if (gameState.phase === 'attack_defenderCard') {
-      pushState(selectDefenseCard(gameState, cardId));
+    if (gs.phase === 'attack_defenderCard') {
+      act('selectDefenseCard', { cardId });
       return;
     }
-
-    if (gameState.phase === 'scheme_selectCard') {
-      pushState(playScheme(gameState, cardId));
+    if (gs.phase === 'scheme_selectCard') {
+      act('playScheme', { cardId });
       return;
     }
-
-    if (gameState.phase === 'discard_excess') {
-      pushState(discardExcessCard(gameState, cardId));
+    if (gs.phase === 'discard_excess') {
+      act('discardExcessCard', { cardId });
       return;
     }
-
-    // Post-combat: opponent discard
-    if (gameState.phase === 'effect_opponentDiscard') {
-      pushState(resolveEffectDiscard(gameState, cardId));
+    if (gs.phase === 'effect_opponentDiscard') {
+      act('resolveEffectDiscard', { cardId });
       return;
     }
-
-    // Meditate: search deck for card
-    if (gameState.phase === 'effect_chooseSearch') {
-      pushState(resolveSearchChoice(gameState, cardId));
+    if (gs.phase === 'effect_chooseSearch') {
+      act('resolveSearchChoice', { cardId });
       return;
     }
-  }, [gameState, pushState]);
+  }, [gs, canInteract, act]);
 
   const handleSkipDefense = useCallback(() => {
-    if (!gameState) return;
-    pushState(selectDefenseCard(gameState, null));
-  }, [gameState, pushState]);
+    act('selectDefenseCard', { cardId: null });
+  }, [act]);
 
   // ---- Computed highlights ----
 
   const highlightedSpaces = (() => {
-    if (!gameState) return [];
+    if (!gs) return [];
+    if (!canInteract) return []; // Don't show highlights when it's not your turn
 
-    if (gameState.phase === 'place_sidekick' && gameState.placementPlayer !== null) {
-      return getValidPlacementSpaces(gameState, gameState.placementPlayer);
+    if (gs.phase === 'place_sidekick' && gs.placementPlayer !== null) {
+      return getValidPlacementSpaces(gs, gs.placementPlayer);
     }
-
-    if (gameState.phase === 'maneuver_moveFighter' && gameState.maneuverCurrentFighter) {
-      const f = getFighter(gameState, gameState.maneuverCurrentFighter);
+    if (gs.phase === 'maneuver_moveFighter' && gs.maneuverCurrentFighter) {
+      const f = getFighter(gs, gs.maneuverCurrentFighter);
       if (f) {
-        // Use schemeMoveRange if it's a scheme movement, otherwise use fighter move + boost
-        const range = gameState.pendingSchemeCard
-          ? gameState.schemeMoveRange
-          : f.moveValue + gameState.maneuverBoost;
-        return getReachableSpaces(gameState.board, f.spaceId, range, gameState.fighters, f.id);
+        const range = gs.pendingSchemeCard
+          ? gs.schemeMoveRange
+          : f.moveValue + gs.maneuverBoost;
+        return getReachableSpaces(gs.board, f.spaceId, range, gs.fighters, f.id);
       }
     }
-
-    if (gameState.phase === 'attack_selectTarget' && gameState.selectedFighter) {
-      return getValidTargets(gameState, gameState.selectedFighter).map(t => t.spaceId);
+    if (gs.phase === 'attack_selectTarget' && gs.selectedFighter) {
+      return getValidTargets(gs, gs.selectedFighter).map(t => t.spaceId);
     }
-
-    if (gameState.phase === 'scheme_selectTarget') {
-      return getSchemeTargets(gameState).map(t => t.spaceId);
+    if (gs.phase === 'scheme_selectTarget') {
+      return getSchemeTargets(gs).map(t => t.spaceId);
     }
-
-    if (gameState.phase === 'scheme_moveSidekick' && gameState.schemeMoveFighterId) {
-      const f = getFighter(gameState, gameState.schemeMoveFighterId);
+    if (gs.phase === 'scheme_moveSidekick' && gs.schemeMoveFighterId) {
+      const f = getFighter(gs, gs.schemeMoveFighterId);
       if (f) {
-        return getReachableSpaces(gameState.board, f.spaceId, gameState.schemeMoveRange, gameState.fighters, f.id);
+        return getReachableSpaces(gs.board, f.spaceId, gs.schemeMoveRange, gs.fighters, f.id);
       }
     }
-
-    if (gameState.phase === 'medusa_startAbility') {
-      return getMedusaGazeTargets(gameState).map(t => t.spaceId);
+    if (gs.phase === 'medusa_startAbility') {
+      return getMedusaGazeTargets(gs).map(t => t.spaceId);
     }
-
-    // Post-combat effect: move fighter
-    if (gameState.phase === 'effect_moveFighter') {
-      return getEffectMoveSpaces(gameState);
+    if (gs.phase === 'effect_moveFighter') {
+      return getEffectMoveSpaces(gs);
     }
-
-    // Post-combat effect: place fighter anywhere
-    if (gameState.phase === 'effect_placeFighter') {
-      return getPlaceFighterSpaces(gameState);
+    if (gs.phase === 'effect_placeFighter') {
+      return getPlaceFighterSpaces(gs);
     }
-
-    // Scheme: revive harpy
-    if (gameState.phase === 'scheme_reviveHarpy') {
-      return getReviveHarpySpaces(gameState);
+    if (gs.phase === 'scheme_reviveHarpy') {
+      return getReviveHarpySpaces(gs);
     }
-
-    // Post-combat effect: push fighter
-    if (gameState.phase === 'effect_pushFighter' && gameState.pushTargetId) {
-      return getPushSpaces(gameState, gameState.pushTargetId, gameState.pushRange);
+    if (gs.phase === 'effect_pushFighter' && gs.pushTargetId) {
+      return getPushSpaces(gs, gs.pushTargetId, gs.pushRange);
     }
-
     return [];
   })();
 
-  // ---- Render ----
+  // ---- Which hand to show ----
 
-  if (!gameState) {
+  const showMyHand = () => {
+    if (!gs) return null;
+
+    const cp = currentPlayer(gs);
+    const charDef = getCharDef(cp.characterId);
+    const opponentIndex = gs.currentPlayer === 0 ? 1 : 0;
+    const opponentPlayer = gs.players[opponentIndex];
+    const opponentCharDef = getCharDef(opponentPlayer.characterId);
+    const aliveFightersCurrent = gs.fighters.filter(f => f.owner === gs.currentPlayer && f.hp > 0);
+
+    // In online mode, show only the local player's hand normally.
+    // For defender phases that require opponent's hand, show it only if we are the defender.
+    if (mode === 'online_game' && online.playerIndex !== null) {
+      const myIndex = online.playerIndex;
+      const myPlayer = gs.players[myIndex];
+      const myCharDef = getCharDef(myPlayer.characterId);
+
+      // Defender card selection: show defender's hand (only the defender sees this)
+      if (gs.phase === 'attack_defenderCard' && gs.currentPlayer !== myIndex) {
+        const defender = gs.combat ? getFighter(gs, gs.combat.defenderId) : undefined;
+        return (
+          <CardHand
+            hand={myPlayer.hand}
+            charDef={myCharDef}
+            onCardClick={handleCardClick}
+            filter="defense"
+            fighter={defender}
+            label={`${myPlayer.name}'s Hand (Defense)`}
+          />
+        );
+      }
+
+      // Opponent discard: show the opponent's hand (only the discarding player sees this)
+      if (gs.phase === 'effect_opponentDiscard' && gs.currentPlayer !== myIndex) {
+        return (
+          <CardHand
+            hand={myPlayer.hand}
+            charDef={myCharDef}
+            onCardClick={handleCardClick}
+            label={`${myPlayer.name}'s Hand (Choose to discard)`}
+          />
+        );
+      }
+
+      // Search deck
+      if (gs.phase === 'effect_chooseSearch' && gs.currentPlayer === myIndex) {
+        return (
+          <CardHand
+            hand={gs.searchCards}
+            charDef={myCharDef}
+            onCardClick={handleCardClick}
+            label={`${myPlayer.name}'s Deck (Choose a card)`}
+          />
+        );
+      }
+
+      // Default: show my hand
+      const myAliveFighters = gs.fighters.filter(f => f.owner === myIndex && f.hp > 0);
+      const attackerFighter = gs.combat && gs.phase === 'attack_selectCard' && gs.currentPlayer === myIndex
+        ? getFighter(gs, gs.combat.attackerId) : undefined;
+      return (
+        <CardHand
+          hand={myPlayer.hand}
+          charDef={myCharDef}
+          onCardClick={canInteract ? handleCardClick : () => {}}
+          filter={
+            gs.phase === 'attack_selectCard' && canInteract ? 'attack' :
+            gs.phase === 'scheme_selectCard' && canInteract ? 'scheme' :
+            undefined
+          }
+          fighter={attackerFighter}
+          aliveFighters={gs.phase === 'scheme_selectCard' && canInteract ? myAliveFighters : undefined}
+          label={`${myPlayer.name}'s Hand`}
+        />
+      );
+    }
+
+    // Local/hot-seat mode: show hands as before
+    if (gs.phase === 'attack_defenderCard') {
+      const defender = gs.combat ? getFighter(gs, gs.combat.defenderId) : undefined;
+      return (
+        <CardHand
+          hand={opponentPlayer.hand}
+          charDef={opponentCharDef}
+          onCardClick={handleCardClick}
+          filter="defense"
+          fighter={defender}
+          label={`${opponentPlayer.name}'s Hand (Defense)`}
+        />
+      );
+    }
+    if (gs.phase === 'effect_opponentDiscard') {
+      return (
+        <CardHand
+          hand={opponentPlayer.hand}
+          charDef={opponentCharDef}
+          onCardClick={handleCardClick}
+          label={`${opponentPlayer.name}'s Hand (Choose to discard)`}
+        />
+      );
+    }
+    if (gs.phase === 'effect_chooseSearch') {
+      return (
+        <CardHand
+          hand={gs.searchCards}
+          charDef={charDef}
+          onCardClick={handleCardClick}
+          label={`${cp.name}'s Deck (Choose a card)`}
+        />
+      );
+    }
+
+    const attackerFighter = gs.combat && gs.phase === 'attack_selectCard'
+      ? getFighter(gs, gs.combat.attackerId) : undefined;
+    return (
+      <CardHand
+        hand={cp.hand}
+        charDef={charDef}
+        onCardClick={handleCardClick}
+        filter={
+          gs.phase === 'attack_selectCard' ? 'attack' :
+          gs.phase === 'scheme_selectCard' ? 'scheme' :
+          undefined
+        }
+        fighter={attackerFighter}
+        aliveFighters={gs.phase === 'scheme_selectCard' ? aliveFightersCurrent : undefined}
+        label={`${cp.name}'s Hand`}
+      />
+    );
+  };
+
+  // ======== RENDER ========
+
+  // ---- Main menu ----
+  if (mode === 'menu') {
     return (
       <div className="setup-screen">
         <h1>Unmatched</h1>
         <h2>Battle of Legends</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center', marginTop: '32px' }}>
+          <button className="start-btn" onClick={() => setMode('local')}>
+            Local Game (Hot-seat)
+          </button>
+          <button className="start-btn" onClick={() => setMode('online_lobby')}>
+            Online Game
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Local setup ----
+  if (mode === 'local' && !gameState) {
+    return (
+      <div className="setup-screen">
+        <h1>Unmatched</h1>
+        <h2>Local Game</h2>
         <div className="setup-form">
           <div className="setup-player">
             <label>Player 1 Name:</label>
@@ -303,49 +454,167 @@ export const Game: React.FC = () => {
             </select>
           </div>
         </div>
-        <button className="start-btn" onClick={startGame}>Start Game</button>
+        <button className="start-btn" onClick={startLocalGame}>Start Game</button>
+        <button className="skip-btn" style={{ marginTop: '12px' }} onClick={() => { setMode('menu'); }}>Back</button>
       </div>
     );
   }
 
-  const cp = currentPlayer(gameState);
-  const charDef = getCharDef(cp.characterId);
-  const opponentIndex = gameState.currentPlayer === 0 ? 1 : 0;
-  const opponentPlayer = gameState.players[opponentIndex];
-  const opponentCharDef = getCharDef(opponentPlayer.characterId);
-  const aliveFightersCurrent = gameState.fighters.filter(f => f.owner === gameState.currentPlayer && f.hp > 0);
-  const placingPlayerName = gameState.placementPlayer !== null
-    ? gameState.players[gameState.placementPlayer].name : '';
-  const nextPlacementFighter = gameState.placementFighterIds.length > 0
-    ? getFighter(gameState, gameState.placementFighterIds[0]) : null;
+  // ---- Online lobby ----
+  if (mode === 'online_lobby') {
+    return (
+      <div className="setup-screen">
+        <h1>Unmatched</h1>
+        <h2>Online Game</h2>
+
+        {online.waiting && online.roomCode && (
+          <div style={{ textAlign: 'center', margin: '24px 0' }}>
+            <div style={{ fontSize: '18px', marginBottom: '8px' }}>Room Code:</div>
+            <div style={{ fontSize: '48px', fontWeight: 'bold', letterSpacing: '8px', fontFamily: 'monospace' }}>
+              {online.roomCode}
+            </div>
+            <div style={{ color: '#aaa', marginTop: '8px' }}>Waiting for opponent to join...</div>
+            <button className="skip-btn" style={{ marginTop: '16px' }} onClick={() => { online.disconnect(); }}>Cancel</button>
+          </div>
+        )}
+
+        {online.gameState && !online.waiting && (
+          // Game started! Switch to online game mode
+          (() => { if (mode === 'online_lobby') { setTimeout(() => setMode('online_game'), 0); } return null; })()
+        )}
+
+        {!online.waiting && !online.roomCode && (
+          <>
+            <div className="setup-form" style={{ flexDirection: 'column', alignItems: 'center' }}>
+              <div className="setup-player">
+                <label>Your Name:</label>
+                <input value={lobbyName} onChange={e => setLobbyName(e.target.value)} placeholder="Enter your name" />
+                <label>Character:</label>
+                <select value={lobbyChar} onChange={e => setLobbyChar(e.target.value)}>
+                  {ALL_CHARACTERS.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.hp} HP, {c.isRanged ? 'Ranged' : 'Melee'})</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center', marginTop: '24px' }}>
+              <button
+                className="start-btn"
+                onClick={() => online.createRoom(lobbyChar, lobbyName || 'Player')}
+                disabled={!online.connected}
+              >
+                Create Room
+              </button>
+
+              <div style={{ color: '#aaa', fontSize: '14px' }}>— or —</div>
+
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  value={joinCode}
+                  onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                  placeholder="ROOM CODE"
+                  maxLength={4}
+                  style={{ width: '120px', textAlign: 'center', fontSize: '20px', fontFamily: 'monospace', letterSpacing: '4px' }}
+                />
+                <button
+                  className="start-btn"
+                  onClick={() => online.joinRoom(joinCode, lobbyChar, lobbyName || 'Player')}
+                  disabled={!online.connected || joinCode.length < 4}
+                >
+                  Join
+                </button>
+              </div>
+            </div>
+
+            {!online.connected && (
+              <div style={{ color: '#ff6666', textAlign: 'center', marginTop: '12px' }}>
+                Connecting to server...
+              </div>
+            )}
+
+            {online.error && (
+              <div style={{ color: '#ff6666', textAlign: 'center', marginTop: '12px' }}>
+                {online.error}
+              </div>
+            )}
+
+            <button className="skip-btn" style={{ marginTop: '16px' }} onClick={() => { setMode('menu'); online.disconnect(); }}>Back</button>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ---- Game view (local or online) ----
+
+  if (!gs) {
+    return (
+      <div className="setup-screen">
+        <h1>Loading...</h1>
+        <button className="skip-btn" onClick={() => { setMode('menu'); online.disconnect(); }}>Back to Menu</button>
+      </div>
+    );
+  }
+
+  const cp = currentPlayer(gs);
+  const opponentIndex = gs.currentPlayer === 0 ? 1 : 0;
+  const opponentPlayer = gs.players[opponentIndex];
+  const placingPlayerName = gs.placementPlayer !== null
+    ? gs.players[gs.placementPlayer].name : '';
+  const nextPlacementFighter = gs.placementFighterIds.length > 0
+    ? getFighter(gs, gs.placementFighterIds[0]) : null;
+
+  // For online mode, who are we waiting for?
+  const waitingForName = (() => {
+    if (mode !== 'online_game' || canInteract) return null;
+    if (!gs || online.playerIndex === null) return null;
+    // Figure out who needs to act
+    if (gs.phase === 'place_sidekick' && gs.placementPlayer !== null) {
+      return gs.players[gs.placementPlayer].name;
+    }
+    if (gs.phase === 'attack_defenderCard' || gs.phase === 'effect_opponentDiscard') {
+      const defIdx = gs.currentPlayer === 0 ? 1 : 0;
+      return gs.players[defIdx].name;
+    }
+    return gs.players[gs.currentPlayer].name;
+  })();
 
   return (
     <div className="game-container">
-      {stateHistory.length > 0 && gameState.phase !== 'gameOver' && (
+      {/* Undo button - local mode only */}
+      {mode === 'local' && stateHistory.length > 0 && gs.phase !== 'gameOver' && (
         <button className="undo-btn" onClick={handleUndo}>Undo</button>
       )}
 
+      {/* Waiting banner for online mode */}
+      {waitingForName && (
+        <div className="phase-prompt" style={{ background: '#333', borderBottom: '2px solid #555' }}>
+          <div className="phase-text">Waiting for {waitingForName}...</div>
+        </div>
+      )}
+
       <div className="huds-row">
-        <PlayerHUD state={gameState} playerIndex={0} isActive={gameState.currentPlayer === 0} />
-        <PlayerHUD state={gameState} playerIndex={1} isActive={gameState.currentPlayer === 1} />
+        <PlayerHUD state={gs} playerIndex={0} isActive={gs.currentPlayer === 0} />
+        <PlayerHUD state={gs} playerIndex={1} isActive={gs.currentPlayer === 1} />
       </div>
 
       <div className="main-area">
         <div className="board-area">
           <Board
-            state={gameState}
+            state={gs}
             reachableSpaces={highlightedSpaces}
             onSpaceClick={handleSpaceClick}
           />
         </div>
         <div className="right-panel">
-          <GameLog log={gameState.log} />
+          <GameLog log={gs.log} />
         </div>
       </div>
 
-      {/* Phase-specific UI */}
+      {/* Phase-specific UI - only show when canInteract */}
 
-      {gameState.phase === 'place_sidekick' && (
+      {canInteract && gs.phase === 'place_sidekick' && (
         <div className="phase-prompt">
           <div className="phase-text">
             {placingPlayerName}: Place {nextPlacementFighter?.name} on a highlighted space in your starting zone.
@@ -353,80 +622,81 @@ export const Game: React.FC = () => {
         </div>
       )}
 
-      {gameState.phase === 'medusa_startAbility' && (
+      {canInteract && gs.phase === 'medusa_startAbility' && (
         <div className="phase-prompt">
           <div className="phase-text">
             Medusa's Gaze: Click an enemy fighter in Medusa's zone to deal 1 damage, or skip.
           </div>
-          <button className="skip-btn" onClick={() => pushState(skipMedusaGaze(gameState))}>
+          <button className="skip-btn" onClick={() => act('skipMedusaGaze')}>
             Skip Gaze
           </button>
         </div>
       )}
 
-      {gameState.phase === 'playing' && (
+      {canInteract && gs.phase === 'playing' && (
         <ActionBar
-          state={gameState}
+          state={gs}
           onManeuver={handleManeuver}
           onStartAttack={handleStartAttack}
           onStartScheme={handleStartScheme}
         />
       )}
 
-      {gameState.phase === 'maneuver_boost' && (
+      {canInteract && gs.phase === 'maneuver_boost' && (
         <div className="phase-prompt">
           <div className="phase-text">
             Discard a card for movement boost? Click a card below, or skip.
           </div>
-          <button className="skip-btn" onClick={() => pushState(applyManeuverBoost(gameState, null))}>
+          <button className="skip-btn" onClick={() => act('applyManeuverBoost', { cardId: null })}>
             Skip Boost
           </button>
         </div>
       )}
 
-      {(gameState.phase === 'maneuver_selectFighter' || gameState.phase === 'scheme_moveAll') && (
+      {canInteract && (gs.phase === 'maneuver_selectFighter' || gs.phase === 'scheme_moveAll') && (
         <div className="phase-prompt">
-          <div className="phase-text">Select a fighter to move{gameState.maneuverBoost > 0 ? ` (+${gameState.maneuverBoost} boost)` : ''}:</div>
+          <div className="phase-text">Select a fighter to move{gs.maneuverBoost > 0 ? ` (+${gs.maneuverBoost} boost)` : ''}:</div>
           <div className="fighter-select-buttons">
-            {gameState.maneuverFightersToMove.map(fid => {
-              const f = getFighter(gameState, fid);
+            {gs.maneuverFightersToMove.map(fid => {
+              const f = getFighter(gs, fid);
               if (!f) return null;
-              const moveRange = gameState.phase === 'scheme_moveAll'
-                ? gameState.schemeMoveRange
-                : f.moveValue + gameState.maneuverBoost;
+              const moveRange = gs.phase === 'scheme_moveAll'
+                ? gs.schemeMoveRange
+                : f.moveValue + gs.maneuverBoost;
               return (
                 <button key={fid} className="fighter-btn"
-                  onClick={() => pushState(
-                    gameState.phase === 'scheme_moveAll'
-                      ? selectSchemeMoveAllFighter(gameState, fid)
-                      : selectManeuverFighter(gameState, fid)
+                  onClick={() => act(
+                    gs.phase === 'scheme_moveAll'
+                      ? 'selectSchemeMoveAllFighter'
+                      : 'selectManeuverFighter',
+                    { fighterId: fid }
                   )}>
                   {f.isHero ? '★' : '●'} {f.name} (move: {moveRange})
                 </button>
               );
             })}
           </div>
-          <button className="skip-btn" onClick={() => pushState(
-            gameState.phase === 'scheme_moveAll'
-              ? skipAllSchemeMoveAll(gameState)
-              : skipAllManeuverMoves(gameState)
+          <button className="skip-btn" onClick={() => act(
+            gs.phase === 'scheme_moveAll'
+              ? 'skipAllSchemeMoveAll'
+              : 'skipAllManeuverMoves'
           )}>
             Skip All Movement
           </button>
         </div>
       )}
 
-      {gameState.phase === 'maneuver_moveFighter' && (() => {
-        const f = gameState.maneuverCurrentFighter ? getFighter(gameState, gameState.maneuverCurrentFighter) : null;
+      {canInteract && gs.phase === 'maneuver_moveFighter' && (() => {
+        const f = gs.maneuverCurrentFighter ? getFighter(gs, gs.maneuverCurrentFighter) : null;
         return (
           <div className="phase-prompt">
             <div className="phase-text">
               Moving {f?.name} - click a highlighted space, or skip.
             </div>
-            <button className="skip-btn" onClick={() => pushState(
-              gameState.pendingSchemeCard
-                ? skipSchemeMoveAllFighter(gameState)
-                : skipFighterMove(gameState)
+            <button className="skip-btn" onClick={() => act(
+              gs.pendingSchemeCard
+                ? 'skipSchemeMoveAllFighter'
+                : 'skipFighterMove'
             )}>
               Skip This Fighter
             </button>
@@ -434,81 +704,81 @@ export const Game: React.FC = () => {
         );
       })()}
 
-      {gameState.phase === 'attack_selectTarget' && (
+      {canInteract && gs.phase === 'attack_selectTarget' && (
         <div className="phase-prompt">
           <div className="phase-text">Click a highlighted space to select attack target.</div>
-          <button className="skip-btn" onClick={() => pushState({ ...JSON.parse(JSON.stringify(gameState)), phase: 'playing', selectedFighter: null })}>Cancel</button>
+          <button className="skip-btn" onClick={() => act('cancelAttackTarget')}>Cancel</button>
         </div>
       )}
 
-      {gameState.phase === 'attack_selectCard' && (
+      {canInteract && gs.phase === 'attack_selectCard' && (
         <div className="phase-prompt">
           <div className="phase-text">Select an attack card from your hand:</div>
-          <button className="skip-btn" onClick={() => pushState({ ...JSON.parse(JSON.stringify(gameState)), phase: 'playing', selectedFighter: null, combat: null })}>Cancel</button>
+          <button className="skip-btn" onClick={() => act('cancelAttack')}>Cancel</button>
         </div>
       )}
 
-      {gameState.phase === 'arthur_attackBoost' && (
+      {canInteract && gs.phase === 'arthur_attackBoost' && (
         <div className="phase-prompt">
           <div className="phase-text">
             King Arthur: Play an additional card as a boost (its BOOST value is added to attack), or skip.
           </div>
-          <button className="skip-btn" onClick={() => pushState(selectArthurBoostCard(gameState, null))}>
+          <button className="skip-btn" onClick={() => act('selectArthurBoostCard', { cardId: null })}>
             Skip Boost
           </button>
         </div>
       )}
 
-      {gameState.phase === 'combat_duringBoost' && (
+      {canInteract && gs.phase === 'combat_duringBoost' && (
         <div className="phase-prompt">
           <div className="phase-text">
             During Combat: You may play a card as a boost (its BOOST value is added to your attack), or skip.
           </div>
-          <button className="skip-btn" onClick={() => pushState(selectDuringCombatBoost(gameState, null))}>
+          <button className="skip-btn" onClick={() => act('selectDuringCombatBoost', { cardId: null })}>
             Skip Boost
           </button>
         </div>
       )}
 
-      {gameState.phase === 'attack_defenderCard' && (
+      {canInteract && gs.phase === 'attack_defenderCard' && (
         <div className="phase-prompt defender-prompt">
           <div className="phase-text">
             {opponentPlayer.name}: Select a defense card or skip.
-            <span className="warning"> (Hand the device to the defender!)</span>
+            {mode === 'local' && <span className="warning"> (Hand the device to the defender!)</span>}
           </div>
           <button className="skip-btn" onClick={handleSkipDefense}>Take the hit (no defense)</button>
         </div>
       )}
 
-      {gameState.phase === 'scheme_selectCard' && (
+      {canInteract && gs.phase === 'scheme_selectCard' && (
         <div className="phase-prompt">
           <div className="phase-text">Select a scheme card to play:</div>
-          <button className="skip-btn" onClick={() => pushState({ ...JSON.parse(JSON.stringify(gameState)), phase: 'playing' })}>Cancel</button>
+          <button className="skip-btn" onClick={() => act('cancelScheme')}>Cancel</button>
         </div>
       )}
 
-      {gameState.phase === 'scheme_selectTarget' && (
+      {canInteract && gs.phase === 'scheme_selectTarget' && (
         <div className="phase-prompt">
           <div className="phase-text">Select an enemy fighter in your hero's zone to target:</div>
         </div>
       )}
 
-      {gameState.phase === 'scheme_moveSidekick' && (() => {
-        const f = gameState.schemeMoveFighterId ? getFighter(gameState, gameState.schemeMoveFighterId) : null;
+      {canInteract && gs.phase === 'scheme_moveSidekick' && (() => {
+        const f = gs.schemeMoveFighterId ? getFighter(gs, gs.schemeMoveFighterId) : null;
         return (
           <div className="phase-prompt">
             <div className="phase-text">
-              Move {f?.name} up to {gameState.schemeMoveRange} spaces - click a highlighted space, or skip.
+              Move {f?.name} up to {gs.schemeMoveRange} spaces - click a highlighted space, or skip.
             </div>
-            <button className="skip-btn" onClick={() => pushState(skipSchemeSidekickMove(gameState))}>
+            <button className="skip-btn" onClick={() => act('skipSchemeSidekickMove')}>
               Skip Movement
             </button>
           </div>
         );
       })()}
 
-      {gameState.phase === 'scheme_reviveHarpy' && (() => {
-        const f = gameState.schemeMoveFighterId ? getFighter(gameState, gameState.schemeMoveFighterId) : null;
+      {canInteract && gs.phase === 'scheme_reviveHarpy' && (() => {
+        const f = gs.schemeMoveFighterId ? getFighter(gs, gs.schemeMoveFighterId) : null;
         return (
           <div className="phase-prompt">
             <div className="phase-text">
@@ -518,31 +788,31 @@ export const Game: React.FC = () => {
         );
       })()}
 
-      {gameState.phase === 'effect_moveFighter' && (() => {
-        const f = gameState.schemeMoveFighterId ? getFighter(gameState, gameState.schemeMoveFighterId) : null;
+      {canInteract && gs.phase === 'effect_moveFighter' && (() => {
+        const f = gs.schemeMoveFighterId ? getFighter(gs, gs.schemeMoveFighterId) : null;
         return (
           <div className="phase-prompt">
             <div className="phase-text">
-              Move {f?.name} up to {gameState.schemeMoveRange} spaces - click a highlighted space, or skip.
+              Move {f?.name} up to {gs.schemeMoveRange} spaces - click a highlighted space, or skip.
             </div>
-            <button className="skip-btn" onClick={() => pushState(skipEffectMove(gameState))}>
+            <button className="skip-btn" onClick={() => act('skipEffectMove')}>
               Skip Movement
             </button>
           </div>
         );
       })()}
 
-      {gameState.phase === 'effect_opponentDiscard' && (
+      {canInteract && gs.phase === 'effect_opponentDiscard' && (
         <div className="phase-prompt defender-prompt">
           <div className="phase-text">
             {opponentPlayer.name}: Choose a card to discard.
-            <span className="warning"> (Hand the device to {opponentPlayer.name}!)</span>
+            {mode === 'local' && <span className="warning"> (Hand the device to {opponentPlayer.name}!)</span>}
           </div>
         </div>
       )}
 
-      {gameState.phase === 'effect_placeFighter' && (() => {
-        const f = gameState.schemeMoveFighterId ? getFighter(gameState, gameState.schemeMoveFighterId) : null;
+      {canInteract && gs.phase === 'effect_placeFighter' && (() => {
+        const f = gs.schemeMoveFighterId ? getFighter(gs, gs.schemeMoveFighterId) : null;
         return (
           <div className="phase-prompt">
             <div className="phase-text">
@@ -552,21 +822,21 @@ export const Game: React.FC = () => {
         );
       })()}
 
-      {gameState.phase === 'effect_pushFighter' && (() => {
-        const f = gameState.pushTargetId ? getFighter(gameState, gameState.pushTargetId) : null;
+      {canInteract && gs.phase === 'effect_pushFighter' && (() => {
+        const f = gs.pushTargetId ? getFighter(gs, gs.pushTargetId) : null;
         return (
           <div className="phase-prompt">
             <div className="phase-text">
-              Push {f?.name} up to {gameState.pushRange} space(s) - click a highlighted space, or skip.
+              Push {f?.name} up to {gs.pushRange} space(s) - click a highlighted space, or skip.
             </div>
-            <button className="skip-btn" onClick={() => pushState(skipEffectPush(gameState))}>
+            <button className="skip-btn" onClick={() => act('skipEffectPush')}>
               Skip Push
             </button>
           </div>
         );
       })()}
 
-      {gameState.phase === 'effect_chooseSearch' && (
+      {canInteract && gs.phase === 'effect_chooseSearch' && (
         <div className="phase-prompt">
           <div className="phase-text">
             Meditate: Choose a card from your deck to add to your hand.
@@ -574,7 +844,7 @@ export const Game: React.FC = () => {
         </div>
       )}
 
-      {gameState.phase === 'discard_excess' && (
+      {canInteract && gs.phase === 'discard_excess' && (
         <div className="phase-prompt">
           <div className="phase-text">
             {cp.name}: Discard down to 7 cards ({cp.hand.length - 7} more to discard).
@@ -582,62 +852,23 @@ export const Game: React.FC = () => {
         </div>
       )}
 
-      {gameState.phase === 'gameOver' && (
+      {gs.phase === 'gameOver' && (
         <div className="game-over-overlay">
           <div className="game-over-box">
-            <h2>{gameState.players[gameState.winner!].name} Wins!</h2>
-            <button onClick={() => { setGameState(null); setStateHistory([]); }}>Play Again</button>
+            <h2>{gs.players[gs.winner!].name} Wins!</h2>
+            <button onClick={() => {
+              setGameState(null);
+              setStateHistory([]);
+              online.disconnect();
+              setMode('menu');
+            }}>Play Again</button>
           </div>
         </div>
       )}
 
       {/* Card hands */}
       <div className="hands-area">
-        {gameState.phase === 'attack_defenderCard' ? (() => {
-          const defender = gameState.combat ? getFighter(gameState, gameState.combat.defenderId) : undefined;
-          return (
-            <CardHand
-              hand={opponentPlayer.hand}
-              charDef={opponentCharDef}
-              onCardClick={handleCardClick}
-              filter="defense"
-              fighter={defender}
-              label={`${opponentPlayer.name}'s Hand (Defense)`}
-            />
-          );
-        })() : gameState.phase === 'effect_opponentDiscard' ? (
-          <CardHand
-            hand={opponentPlayer.hand}
-            charDef={opponentCharDef}
-            onCardClick={handleCardClick}
-            label={`${opponentPlayer.name}'s Hand (Choose to discard)`}
-          />
-        ) : gameState.phase === 'effect_chooseSearch' ? (
-          <CardHand
-            hand={gameState.searchCards}
-            charDef={charDef}
-            onCardClick={handleCardClick}
-            label={`${cp.name}'s Deck (Choose a card)`}
-          />
-        ) : (() => {
-          const attackerFighter = gameState.combat && gameState.phase === 'attack_selectCard'
-            ? getFighter(gameState, gameState.combat.attackerId) : undefined;
-          return (
-            <CardHand
-              hand={cp.hand}
-              charDef={charDef}
-              onCardClick={handleCardClick}
-              filter={
-                gameState.phase === 'attack_selectCard' ? 'attack' :
-                gameState.phase === 'scheme_selectCard' ? 'scheme' :
-                undefined
-              }
-              fighter={attackerFighter}
-              aliveFighters={gameState.phase === 'scheme_selectCard' ? aliveFightersCurrent : undefined}
-              label={`${cp.name}'s Hand`}
-            />
-          );
-        })()}
+        {showMyHand()}
       </div>
     </div>
   );

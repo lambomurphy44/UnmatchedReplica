@@ -812,12 +812,9 @@ function resolveCombat(state: GameState): GameState {
   const atkDuring = (!s.combat.attackerEffectsCancelled
     ? atkCardDef?.effects.filter(e => e.timing === 'duringCombat') : []) || [];
 
-  let preventDamage = false;
-
   // Defender's DURING COMBAT
   for (const effect of defDuring) {
     if (effect.type === 'preventDamage') {
-      preventDamage = true;
       addLog(s, `${defCardDef?.name}: All damage is prevented!`);
     }
     if (effect.type === 'valueIfMoved') {
