@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { GameState } from '../game/types';
 import {
   createGame, currentPlayer, getCharDef, getFighter,
@@ -15,7 +15,6 @@ import { Board } from './Board';
 import { CardHand } from './CardHand';
 import { PlayerHUD } from './PlayerHUD';
 import { ActionBar } from './ActionBar';
-import { GameLog } from './GameLog';
 import { ALL_CHARACTERS } from '../game/characters';
 import { useOnlineGame } from '../hooks/useOnlineGame';
 
@@ -41,8 +40,20 @@ export const Game: React.FC = () => {
   const [lobbyName, setLobbyName] = useState('');
   const [joinCode, setJoinCode] = useState('');
 
+  // Game log toggle
+  const [logOpen, setLogOpen] = useState(false);
+  const logEndRef = useRef<HTMLDivElement>(null);
+
   // Effective game state (local or online)
   const gs: GameState | null = mode === 'online_game' ? online.gameState : gameState;
+
+  // Auto-scroll log when new entries appear
+  const logLen = gs?.log.length ?? 0;
+  useEffect(() => {
+    if (logOpen && logEndRef.current) {
+      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logLen, logOpen]);
 
   // ---- Local state management ----
   const pushState = useCallback((newState: GameState) => {
@@ -587,19 +598,23 @@ export const Game: React.FC = () => {
         <button className="undo-btn" onClick={handleUndo}>Undo</button>
       )}
 
+      {/* Log toggle button */}
+      <button className="log-toggle-btn" onClick={() => setLogOpen(o => !o)}>
+        {logOpen ? 'Hide Log' : 'Log'}
+      </button>
+
       {/* Waiting banner for online mode */}
       {waitingForName && (
-        <div className="phase-prompt" style={{ background: '#333', borderBottom: '2px solid #555' }}>
+        <div className="phase-prompt waiting-banner">
           <div className="phase-text">Waiting for {waitingForName}...</div>
         </div>
       )}
 
-      <div className="huds-row">
-        <PlayerHUD state={gs} playerIndex={0} isActive={gs.currentPlayer === 0} />
-        <PlayerHUD state={gs} playerIndex={1} isActive={gs.currentPlayer === 1} />
-      </div>
-
       <div className="main-area">
+        <div className="hud-side hud-left">
+          <PlayerHUD state={gs} playerIndex={0} isActive={gs.currentPlayer === 0} />
+        </div>
+
         <div className="board-area">
           <Board
             state={gs}
@@ -607,10 +622,27 @@ export const Game: React.FC = () => {
             onSpaceClick={handleSpaceClick}
           />
         </div>
-        <div className="right-panel">
-          <GameLog log={gs.log} />
+
+        <div className="hud-side hud-right">
+          <PlayerHUD state={gs} playerIndex={1} isActive={gs.currentPlayer === 1} />
         </div>
       </div>
+
+      {/* Collapsible game log overlay */}
+      {logOpen && (
+        <div className="log-overlay">
+          <div className="log-overlay-header">
+            <span>Game Log</span>
+            <button className="log-close-btn" onClick={() => setLogOpen(false)}>X</button>
+          </div>
+          <div className="log-overlay-entries">
+            {gs.log.map((entry, i) => (
+              <div key={i} className="log-entry">{entry}</div>
+            ))}
+            <div ref={logEndRef} />
+          </div>
+        </div>
+      )}
 
       {/* Phase-specific UI - only show when canInteract */}
 

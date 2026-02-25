@@ -92,7 +92,7 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
   const allZones = Array.from(new Set(board.spaces.flatMap(s => s.zones))).sort();
 
   return (
-    <svg width={svgW} height={svgH} className="board-svg">
+    <svg viewBox={`0 0 ${svgW} ${svgH}`} className="board-svg">
       {/* Zone legend */}
       {allZones.map((z, i) => (
         <g key={`legend-${z}`} transform={`translate(${10 + i * 110}, ${svgH - 20})`}>
