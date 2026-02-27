@@ -40,7 +40,7 @@
 }
 
 .setup-player label {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #aaa;
 }
 
@@ -82,10 +82,9 @@
 }
 
 .hud-side {
-  width: 195px;
   flex-shrink: 0;
   overflow-y: auto;
-  padding: 0.4rem;
+  padding: 0.5rem;
   background: #16162e;
   display: flex;
   flex-direction: column;
@@ -99,14 +98,38 @@
   border-left: 1px solid #333;
 }
 
+/* ---- Resize Handle ---- */
+.resize-handle {
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: #333;
+  transition: background 0.15s;
+}
+
+.resize-handle:hover {
+  background: #ffd54f;
+}
+
+/* ---- Board Area ---- */
 .board-area {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  padding: 0.4rem;
+  padding: 0.25rem;
   min-width: 0;
+}
+
+.board-zoom-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .board-svg {
@@ -117,6 +140,26 @@
   height: 100%;
   max-width: 100%;
   max-height: 100%;
+  transition: transform 0.05s ease-out;
+}
+
+.board-reset-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 10;
+  background: #2a2a4a;
+  border: 1px solid #555;
+  color: #ccc;
+  font-size: 0.75rem;
+  padding: 0.2em 0.7em;
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+.board-reset-btn:hover {
+  background: #3a3a6a;
+  opacity: 1;
 }
 
 /* ---- Player HUD (sidebar) ---- */
@@ -137,26 +180,26 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.3rem;
   flex-wrap: wrap;
 }
 
 .hud-name {
   font-weight: bold;
-  font-size: 0.9rem;
+  font-size: 1rem;
 }
 
 .hud-char {
   color: #aaa;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
 }
 
 .hud-turn {
   background: #ffd54f;
   color: #000;
-  padding: 0.1em 0.4em;
+  padding: 0.15em 0.5em;
   border-radius: 4px;
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   font-weight: bold;
   margin-left: auto;
 }
@@ -164,8 +207,8 @@
 .hud-fighters {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  font-size: 0.78rem;
+  gap: 0.2rem;
+  font-size: 0.85rem;
 }
 
 .hud-fighter {
@@ -187,24 +230,140 @@
 .hud-stats {
   display: flex;
   gap: 0.5rem;
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   color: #888;
-  margin-top: 0.25rem;
+  margin-top: 0.3rem;
   flex-wrap: wrap;
 }
 
 .hud-ability {
-  font-size: 0.65rem;
+  font-size: 0.78rem;
   color: #ce93d8;
-  margin-top: 0.25rem;
+  margin-top: 0.3rem;
   font-style: italic;
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
 .ability-name {
   font-weight: bold;
   color: #e1bee7;
   font-style: normal;
+}
+
+/* ---- Discard Pile (in HUD) ---- */
+.hud-discard-section {
+  margin-top: 0.4rem;
+  border-top: 1px solid #333;
+  padding-top: 0.3rem;
+}
+
+.hud-discard-header {
+  font-size: 0.78rem;
+  color: #999;
+}
+
+.hud-discard-label {
+  font-weight: bold;
+}
+
+.hud-discard-arrow {
+  font-size: 0.65rem;
+}
+
+.hud-discard-top-card {
+  margin-top: 0.2rem;
+  padding: 0.2rem 0.4rem;
+  border-left: 3px solid #666;
+  background: #1a1a38;
+  border-radius: 3px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.hud-discard-top-card:hover {
+  background: #222250;
+}
+
+.hud-discard-top-type {
+  font-weight: bold;
+  font-size: 0.65rem;
+  letter-spacing: 0.5px;
+}
+
+.hud-discard-top-name {
+  color: #ddd;
+}
+
+.hud-discard-top-val {
+  color: #ffd54f;
+  font-weight: bold;
+}
+
+.hud-discard-expanded {
+  margin-top: 0.3rem;
+}
+
+.hud-discard-sort-row {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+
+.hud-discard-sort-btn {
+  font-size: 0.7rem;
+  padding: 0.15em 0.5em;
+  background: #2a2a4a;
+  border: 1px solid #444;
+  color: #aaa;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.hud-discard-sort-btn.active {
+  background: #3a3a6a;
+  color: #ffd54f;
+  border-color: #ffd54f;
+}
+
+.hud-discard-list {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.hud-discard-item {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 0.15rem 0.3rem;
+  border-left: 3px solid #666;
+  margin-bottom: 1px;
+  font-size: 0.75rem;
+  background: #1a1a38;
+}
+
+.hud-discard-item-type {
+  font-weight: bold;
+  font-size: 0.6rem;
+  min-width: 24px;
+}
+
+.hud-discard-item-name {
+  flex: 1;
+  color: #ddd;
+}
+
+.hud-discard-item-val {
+  color: #ffd54f;
+  font-weight: bold;
+  min-width: 14px;
+  text-align: right;
+}
+
+.hud-discard-item-boost {
+  color: #81c784;
+  font-size: 0.65rem;
+  min-width: 18px;
+  text-align: right;
 }
 
 /* ---- Log Toggle Button ---- */
@@ -217,9 +376,9 @@
   background: #2a2a4a;
   border: 1px solid #555;
   color: #ccc;
-  font-size: 0.7rem;
-  padding: 0.2em 0.9em;
-  opacity: 0.8;
+  font-size: 0.78rem;
+  padding: 0.25em 1em;
+  opacity: 0.85;
 }
 
 .log-toggle-btn:hover {
@@ -230,10 +389,10 @@
 /* ---- Log Overlay ---- */
 .log-overlay {
   position: fixed;
-  top: 32px;
+  top: 34px;
   left: 50%;
   transform: translateX(-50%);
-  width: 420px;
+  width: 450px;
   max-width: 92vw;
   max-height: 50vh;
   background: #1a1a3aee;
@@ -250,10 +409,10 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.35rem 0.8rem;
+  padding: 0.4rem 0.8rem;
   background: #1a1a3a;
   font-weight: bold;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   border-bottom: 1px solid #444;
 }
 
@@ -262,7 +421,7 @@
   border: none;
   color: #aaa;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   padding: 0.2em 0.5em;
 }
 
@@ -277,28 +436,28 @@
 }
 
 .log-entry {
-  padding: 0.15rem 0.4rem;
-  font-size: 0.7rem;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.78rem;
   color: #bbb;
   border-bottom: 1px solid #1a1a2e;
 }
 
 /* ---- Action Bar ---- */
 .action-bar {
-  padding: 0.4rem 1rem;
+  padding: 0.5rem 1rem;
   background: #1a1a3a;
   border-top: 1px solid #444;
 }
 
 .action-label {
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   margin-bottom: 0.3rem;
   color: #ffd54f;
 }
 
 .action-buttons {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
 }
 
@@ -306,15 +465,15 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0.4em 1em;
+  padding: 0.5em 1.2em;
   font-weight: bold;
-  min-width: 120px;
-  font-size: 0.85rem;
+  min-width: 130px;
+  font-size: 0.9rem;
 }
 
 .action-btn small {
   font-weight: normal;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: #aaa;
 }
 
@@ -347,7 +506,7 @@
 
 /* ---- Phase Prompts ---- */
 .phase-prompt {
-  padding: 0.4rem 1rem;
+  padding: 0.5rem 1rem;
   background: #1a1a3a;
   border-top: 1px solid #444;
   display: flex;
@@ -363,7 +522,7 @@
 }
 
 .phase-text {
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   color: #ffd54f;
 }
 
@@ -379,8 +538,8 @@
 }
 
 .fighter-btn {
-  padding: 0.3em 0.7em;
-  font-size: 0.82rem;
+  padding: 0.4em 0.8em;
+  font-size: 0.88rem;
 }
 
 .fighter-btn.selected {
@@ -392,7 +551,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
 }
 
 .skip-btn {
@@ -409,20 +568,20 @@
 .hands-area {
   background: #16162e;
   border-top: 1px solid #333;
-  padding: 0.3rem 0.5rem;
+  padding: 0.4rem 0.6rem;
 }
 
 .card-hand-label {
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   color: #aaa;
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.2rem;
 }
 
 .card-hand-cards {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.4rem;
   overflow-x: auto;
-  padding-bottom: 0.2rem;
+  padding-bottom: 0.25rem;
 }
 
 .card-hidden {
@@ -433,14 +592,14 @@
 
 .game-card {
   flex-shrink: 0;
-  width: 100px;
+  width: 115px;
   border: 2px solid #444;
-  border-radius: 5px;
+  border-radius: 6px;
   background: #1e1e3a;
-  padding: 0.25rem;
+  padding: 0.3rem;
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.1s;
-  font-size: 0.68rem;
+  transition: transform 0.1s, box-shadow 0.1s, opacity 0.15s;
+  font-size: 0.78rem;
 }
 
 .game-card:hover {
@@ -448,11 +607,21 @@
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
 }
 
+.game-card.card-dimmed {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.game-card.card-dimmed:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 .card-type {
   text-align: center;
-  padding: 0.1em 0;
+  padding: 0.12em 0;
   border-radius: 3px;
-  font-size: 0.58rem;
+  font-size: 0.65rem;
   font-weight: bold;
   letter-spacing: 1px;
   color: white;
@@ -463,7 +632,7 @@
   font-weight: bold;
   text-align: center;
   margin-bottom: 0.15rem;
-  font-size: 0.72rem;
+  font-size: 0.82rem;
 }
 
 .card-value {
@@ -472,7 +641,7 @@
 }
 
 .card-val-num {
-  font-size: 1.2rem;
+  font-size: 1.4rem;
   font-weight: bold;
   color: #ffd54f;
 }
@@ -480,19 +649,26 @@
 .card-boost {
   text-align: center;
   color: #81c784;
-  font-size: 0.62rem;
+  font-size: 0.72rem;
+}
+
+.card-qty {
+  text-align: center;
+  color: #78909c;
+  font-size: 0.65rem;
+  margin-top: 0.1rem;
 }
 
 .card-effect {
-  margin-top: 0.15rem;
-  font-size: 0.6rem;
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
   color: #ce93d8;
   text-align: center;
   font-style: italic;
 }
 
 .card-restriction {
-  font-size: 0.58rem;
+  font-size: 0.68rem;
   text-align: center;
   color: #ff8a65;
   margin-top: 0.1rem;
@@ -542,8 +718,8 @@
   background: #6d4c41;
   border-color: #a1887f;
   color: white;
-  font-size: 0.75rem;
-  padding: 0.2em 0.7em;
+  font-size: 0.8rem;
+  padding: 0.25em 0.8em;
   opacity: 0.9;
 }
 
@@ -559,12 +735,12 @@
   }
 
   .hud-side {
-    width: 100%;
+    width: 100% !important;
     flex-direction: row;
     gap: 0.4rem;
     border-right: none !important;
     border-left: none !important;
-    padding: 0.25rem 0.4rem;
+    padding: 0.3rem 0.5rem;
     overflow-y: visible;
     overflow-x: auto;
   }
@@ -583,11 +759,15 @@
     order: 1;
   }
 
+  .resize-handle {
+    display: none;
+  }
+
   .player-hud {
     flex: 1;
     min-width: 0;
     margin-bottom: 0;
-    padding: 0.25rem 0.4rem;
+    padding: 0.3rem 0.5rem;
   }
 
   .hud-fighters {
@@ -595,69 +775,21 @@
     gap: 0.5rem;
   }
 
+  /* Keep ability text visible but compact on narrow screens */
   .hud-ability {
-    display: none;
+    font-size: 0.72rem;
+  }
+
+  .hud-discard-section {
+    margin-top: 0.2rem;
+    padding-top: 0.2rem;
   }
 
   .board-area {
-    padding: 0.2rem;
+    padding: 0.15rem;
   }
 
   .game-card {
-    width: 88px;
-    font-size: 0.62rem;
-  }
-
-  .card-name {
-    font-size: 0.66rem;
-  }
-
-  .card-val-num {
-    font-size: 1rem;
-  }
-
-  .card-effect {
-    font-size: 0.55rem;
-  }
-
-  .card-boost {
-    font-size: 0.55rem;
-  }
-}
-
-/* ======== Responsive: Short screens ======== */
-@media (max-height: 700px) {
-  .hud-ability {
-    display: none;
-  }
-
-  .hud-stats {
-    font-size: 0.62rem;
-  }
-
-  .game-card {
-    width: 88px;
-  }
-
-  .card-val-num {
-    font-size: 1rem;
-  }
-
-  .card-effect {
-    font-size: 0.55rem;
-  }
-
-  .action-btn {
-    padding: 0.3em 0.7em;
-    min-width: 100px;
-    font-size: 0.78rem;
-  }
-
-  .phase-text {
-    font-size: 0.78rem;
-  }
-
-  .hands-area {
-    padding: 0.2rem 0.4rem;
+    width: 100px;
   }
 }

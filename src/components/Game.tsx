@@ -44,6 +44,36 @@ export const Game: React.FC = () => {
   const [logOpen, setLogOpen] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
+  // Resizable panels
+  const [leftWidth, setLeftWidth] = useState(220);
+  const [rightWidth, setRightWidth] = useState(220);
+  const resizingRef = useRef<{ side: 'left' | 'right'; startX: number; startWidth: number } | null>(null);
+
+  const handleResizeStart = useCallback((side: 'left' | 'right', e: React.MouseEvent) => {
+    e.preventDefault();
+    const startWidth = side === 'left' ? leftWidth : rightWidth;
+    resizingRef.current = { side, startX: e.clientX, startWidth };
+
+    const onMove = (ev: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const delta = side === 'left'
+        ? ev.clientX - resizingRef.current.startX
+        : resizingRef.current.startX - ev.clientX;
+      const newW = Math.max(120, Math.min(400, resizingRef.current.startWidth + delta));
+      if (side === 'left') setLeftWidth(newW);
+      else setRightWidth(newW);
+    };
+
+    const onUp = () => {
+      resizingRef.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [leftWidth, rightWidth]);
+
   // Effective game state (local or online)
   const gs: GameState | null = mode === 'online_game' ? online.gameState : gameState;
 
@@ -611,9 +641,10 @@ export const Game: React.FC = () => {
       )}
 
       <div className="main-area">
-        <div className="hud-side hud-left">
+        <div className="hud-side hud-left" style={{ width: leftWidth }}>
           <PlayerHUD state={gs} playerIndex={0} isActive={gs.currentPlayer === 0} />
         </div>
+        <div className="resize-handle" onMouseDown={e => handleResizeStart('left', e)} />
 
         <div className="board-area">
           <Board
@@ -623,7 +654,8 @@ export const Game: React.FC = () => {
           />
         </div>
 
-        <div className="hud-side hud-right">
+        <div className="resize-handle" onMouseDown={e => handleResizeStart('right', e)} />
+        <div className="hud-side hud-right" style={{ width: rightWidth }}>
           <PlayerHUD state={gs} playerIndex={1} isActive={gs.currentPlayer === 1} />
         </div>
       </div>
