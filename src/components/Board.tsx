@@ -1,5 +1,11 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import type { GameState, Fighter, Space } from '../game/types';
+import kingArthurPortrait from '../assets/King Arthur.png';
+import merlinPortrait from '../assets/Merlin.png';
+import aangPortrait from '../assets/Aang.png';
+import appaPortrait from '../assets/Appa.png';
+import medusaPortrait from '../assets/Medusa.png';
+import harpyPortrait from '../assets/Harpy 1.png';
 
 interface BoardProps {
   state: GameState;
@@ -34,12 +40,12 @@ const MAX_ZOOM = 3;
 /** Map fighter to its portrait PNG path */
 function getPortrait(f: Fighter): string {
   if (f.characterId === 'king_arthur') {
-    return f.isHero ? '/art/king_arthur.png' : '/art/merlin.png';
+    return f.isHero ? kingArthurPortrait : merlinPortrait;
   }
   if (f.characterId === 'aang') {
-    return f.isHero ? '/art/aang.png' : '/art/appa.png';
+    return f.isHero ? aangPortrait : appaPortrait;
   }
-  return f.isHero ? '/art/medusa.png' : '/art/harpy.png';
+  return f.isHero ? medusaPortrait : harpyPortrait;
 }
 
 /** Player border glow color */
