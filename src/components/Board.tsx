@@ -31,15 +31,15 @@ const SPACE_R = 26;
 const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 3;
 
-/** Map fighter to its portrait SVG path */
+/** Map fighter to its portrait PNG path */
 function getPortrait(f: Fighter): string {
   if (f.characterId === 'king_arthur') {
-    return f.isHero ? '/art/king_arthur.svg' : '/art/merlin.svg';
+    return f.isHero ? '/art/king_arthur.png' : '/art/merlin.png';
   }
   if (f.characterId === 'aang') {
-    return f.isHero ? '/art/aang.svg' : '/art/appa.svg';
+    return f.isHero ? '/art/aang.png' : '/art/appa.png';
   }
-  return f.isHero ? '/art/medusa.svg' : '/art/harpy.svg';
+  return f.isHero ? '/art/medusa.png' : '/art/harpy.png';
 }
 
 /** Player border glow color */
