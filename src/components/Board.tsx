@@ -1,5 +1,13 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import type { GameState, Fighter, Space } from '../game/types';
+import kingArthurPortrait from '../assets/King Arthur.png';
+import merlinPortrait from '../assets/Merlin.png';
+import aangPortrait from '../assets/Aang.png';
+import appaPortrait from '../assets/Appa.png';
+import medusaPortrait from '../assets/Medusa.png';
+import harpy1Portrait from '../assets/Harpy 1.png';
+import harpy2Portrait from '../assets/Harpy 2.png';
+import harpy3Portrait from '../assets/Harpy 3.png';
 
 interface BoardProps {
   state: GameState;
@@ -34,12 +42,20 @@ const MAX_ZOOM = 3;
 /** Map fighter to its portrait PNG path */
 function getPortrait(f: Fighter): string {
   if (f.characterId === 'king_arthur') {
-    return f.isHero ? '/art/king_arthur.png' : '/art/merlin.png';
+    return f.isHero ? kingArthurPortrait : merlinPortrait;
   }
   if (f.characterId === 'aang') {
-    return f.isHero ? '/art/aang.png' : '/art/appa.png';
+    return f.isHero ? aangPortrait : appaPortrait;
   }
-  return f.isHero ? '/art/medusa.png' : '/art/harpy.png';
+  if (f.isHero) return medusaPortrait;
+
+  // Medusa has 3 distinct harpy fighters with unique art.
+  if (f.name.endsWith(' 1')) return harpy1Portrait;
+  if (f.name.endsWith(' 2')) return harpy2Portrait;
+  if (f.name.endsWith(' 3')) return harpy3Portrait;
+
+  // Fallback for unexpected/non-numbered sidekick names.
+  return harpy1Portrait;
 }
 
 /** Player border glow color */
