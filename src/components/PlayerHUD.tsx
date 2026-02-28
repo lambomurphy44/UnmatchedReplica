@@ -8,11 +8,25 @@ interface PlayerHUDProps {
   isActive: boolean;
 }
 
+const TYPE_COLORS: Record<string, string> = {
+  attack: '#c62828',
+  defense: '#1565c0',
+  versatile: '#6a1b9a',
+  scheme: '#f9a825',
+};
+
 export const PlayerHUD: React.FC<PlayerHUDProps> = ({ state, playerIndex, isActive }) => {
   const player = state.players[playerIndex];
   const charDef = getCharDef(player.characterId);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [discardSort, setDiscardSort] = useState<'order' | 'grouped'>('order');
+  const [discardView, setDiscardView] = useState<'small' | 'full'>('small');
+
+  // Build quantity map from deck definition
+  const quantityMap: Record<string, number> = {};
+  for (const dc of charDef.deckCards) {
+    quantityMap[dc.id] = dc.quantity;
+  }
 
   const topDiscard = player.discard.length > 0 ? player.discard[player.discard.length - 1] : null;
   const topDiscardDef = topDiscard ? getCardDef(topDiscard, charDef) : null;
@@ -25,19 +39,11 @@ export const PlayerHUD: React.FC<PlayerHUDProps> = ({ state, playerIndex, isActi
 
   const sortedDiscard = discardSort === 'grouped'
     ? [...discardCards].sort((a, b) => {
-        // Group by card name, then by type
         const nameCompare = a.def.name.localeCompare(b.def.name);
         if (nameCompare !== 0) return nameCompare;
         return a.def.type.localeCompare(b.def.type);
       })
     : [...discardCards].reverse(); // Most recent first
-
-  const TYPE_COLORS: Record<string, string> = {
-    attack: '#c62828',
-    defense: '#1565c0',
-    versatile: '#6a1b9a',
-    scheme: '#f9a825',
-  };
 
   return (
     <div className={`player-hud ${isActive ? 'active' : ''}`}>
@@ -69,7 +75,7 @@ export const PlayerHUD: React.FC<PlayerHUDProps> = ({ state, playerIndex, isActi
         {isActive && <span>Actions: {player.actionsRemaining}</span>}
       </div>
 
-      {/* Discard pile - top card preview */}
+      {/* Discard pile */}
       <div className="hud-discard-section">
         <div
           className="hud-discard-header"
@@ -115,25 +121,68 @@ export const PlayerHUD: React.FC<PlayerHUDProps> = ({ state, playerIndex, isActi
               >
                 Grouped
               </button>
+              <span className="hud-discard-view-sep">|</span>
+              <button
+                className={`hud-discard-sort-btn ${discardView === 'small' ? 'active' : ''}`}
+                onClick={() => setDiscardView('small')}
+              >
+                List
+              </button>
+              <button
+                className={`hud-discard-sort-btn ${discardView === 'full' ? 'active' : ''}`}
+                onClick={() => setDiscardView('full')}
+              >
+                Cards
+              </button>
             </div>
-            <div className="hud-discard-list">
-              {sortedDiscard.map(({ card, def }) => (
-                <div
-                  key={card.id}
-                  className="hud-discard-item"
-                  style={{ borderLeftColor: TYPE_COLORS[def.type] || '#666' }}
-                >
-                  <span className="hud-discard-item-type" style={{ color: TYPE_COLORS[def.type] }}>
-                    {def.type.substring(0, 3).toUpperCase()}
-                  </span>
-                  <span className="hud-discard-item-name">{def.name}</span>
-                  {def.type !== 'scheme' && (
-                    <span className="hud-discard-item-val">{def.value}</span>
-                  )}
-                  <span className="hud-discard-item-boost">+{def.boost}</span>
-                </div>
-              ))}
-            </div>
+
+            {discardView === 'small' ? (
+              <div className="hud-discard-list">
+                {sortedDiscard.map(({ card, def }) => (
+                  <div
+                    key={card.id}
+                    className="hud-discard-item"
+                    style={{ borderLeftColor: TYPE_COLORS[def.type] || '#666' }}
+                  >
+                    <span className="hud-discard-item-type" style={{ color: TYPE_COLORS[def.type] }}>
+                      {def.type.substring(0, 3).toUpperCase()}
+                    </span>
+                    <span className="hud-discard-item-name">{def.name}</span>
+                    {def.type !== 'scheme' && (
+                      <span className="hud-discard-item-val">{def.value}</span>
+                    )}
+                    <span className="hud-discard-item-boost">+{def.boost}</span>
+                    <span className="hud-discard-item-qty">x{quantityMap[def.id] ?? '?'}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="hud-discard-cards">
+                {sortedDiscard.map(({ card, def }) => (
+                  <div
+                    key={card.id}
+                    className="game-card discard-full-card"
+                    style={{ borderColor: TYPE_COLORS[def.type] || '#666' }}
+                  >
+                    <div className="card-type" style={{ background: TYPE_COLORS[def.type] }}>
+                      {def.type.toUpperCase()}
+                    </div>
+                    <div className="card-name">{def.name}</div>
+                    <div className="card-value">
+                      {def.type !== 'scheme' && <span className="card-val-num">{def.value}</span>}
+                    </div>
+                    <div className="card-boost">Boost: +{def.boost}</div>
+                    <div className="card-qty">x{quantityMap[def.id] ?? '?'} in deck</div>
+                    {def.effectText && (
+                      <div className="card-effect">{def.effectText}</div>
+                    )}
+                    {def.restriction !== 'any' && (
+                      <div className="card-restriction">{def.restriction === 'hero' ? 'Hero only' : 'Sidekick only'}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

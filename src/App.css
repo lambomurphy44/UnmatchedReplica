@@ -40,7 +40,7 @@
 }
 
 .setup-player label {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: #aaa;
 }
 
@@ -98,7 +98,7 @@
   border-left: 1px solid #333;
 }
 
-/* ---- Resize Handle ---- */
+/* ---- Resize Handles ---- */
 .resize-handle {
   width: 5px;
   flex-shrink: 0;
@@ -108,6 +108,18 @@
 }
 
 .resize-handle:hover {
+  background: #ffd54f;
+}
+
+.resize-handle-h {
+  height: 5px;
+  flex-shrink: 0;
+  cursor: row-resize;
+  background: #333;
+  transition: background 0.15s;
+}
+
+.resize-handle-h:hover {
   background: #ffd54f;
 }
 
@@ -151,8 +163,8 @@
   background: #2a2a4a;
   border: 1px solid #555;
   color: #ccc;
-  font-size: 0.75rem;
-  padding: 0.2em 0.7em;
+  font-size: 0.8rem;
+  padding: 0.25em 0.8em;
   opacity: 0.85;
   cursor: pointer;
 }
@@ -186,12 +198,12 @@
 
 .hud-name {
   font-weight: bold;
-  font-size: 1rem;
+  font-size: 1.05rem;
 }
 
 .hud-char {
   color: #aaa;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 
 .hud-turn {
@@ -199,7 +211,7 @@
   color: #000;
   padding: 0.15em 0.5em;
   border-radius: 4px;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: bold;
   margin-left: auto;
 }
@@ -208,7 +220,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 
 .hud-fighter {
@@ -230,18 +242,18 @@
 .hud-stats {
   display: flex;
   gap: 0.5rem;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: #888;
   margin-top: 0.3rem;
   flex-wrap: wrap;
 }
 
 .hud-ability {
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   color: #ce93d8;
-  margin-top: 0.3rem;
+  margin-top: 0.35rem;
   font-style: italic;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 .ability-name {
@@ -258,7 +270,7 @@
 }
 
 .hud-discard-header {
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: #999;
 }
 
@@ -267,16 +279,16 @@
 }
 
 .hud-discard-arrow {
-  font-size: 0.65rem;
+  font-size: 0.7rem;
 }
 
 .hud-discard-top-card {
   margin-top: 0.2rem;
-  padding: 0.2rem 0.4rem;
+  padding: 0.25rem 0.4rem;
   border-left: 3px solid #666;
   background: #1a1a38;
   border-radius: 3px;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   cursor: pointer;
 }
 
@@ -286,7 +298,7 @@
 
 .hud-discard-top-type {
   font-weight: bold;
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   letter-spacing: 0.5px;
 }
 
@@ -305,12 +317,14 @@
 
 .hud-discard-sort-row {
   display: flex;
-  gap: 0.3rem;
+  gap: 0.25rem;
   margin-bottom: 0.3rem;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .hud-discard-sort-btn {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   padding: 0.15em 0.5em;
   background: #2a2a4a;
   border: 1px solid #444;
@@ -325,8 +339,14 @@
   border-color: #ffd54f;
 }
 
+.hud-discard-view-sep {
+  color: #555;
+  font-size: 0.7rem;
+  margin: 0 0.1rem;
+}
+
 .hud-discard-list {
-  max-height: 180px;
+  max-height: 200px;
   overflow-y: auto;
 }
 
@@ -334,17 +354,17 @@
   display: flex;
   gap: 0.3rem;
   align-items: center;
-  padding: 0.15rem 0.3rem;
+  padding: 0.2rem 0.3rem;
   border-left: 3px solid #666;
   margin-bottom: 1px;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   background: #1a1a38;
 }
 
 .hud-discard-item-type {
   font-weight: bold;
-  font-size: 0.6rem;
-  min-width: 24px;
+  font-size: 0.65rem;
+  min-width: 26px;
 }
 
 .hud-discard-item-name {
@@ -361,9 +381,35 @@
 
 .hud-discard-item-boost {
   color: #81c784;
+  font-size: 0.68rem;
+  min-width: 18px;
+  text-align: right;
+}
+
+.hud-discard-item-qty {
+  color: #78909c;
   font-size: 0.65rem;
   min-width: 18px;
   text-align: right;
+}
+
+/* Discard full card view */
+.hud-discard-cards {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.2rem 0;
+}
+
+.discard-full-card {
+  cursor: default;
+}
+
+.discard-full-card:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 /* ---- Log Toggle Button ---- */
@@ -376,7 +422,7 @@
   background: #2a2a4a;
   border: 1px solid #555;
   color: #ccc;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   padding: 0.25em 1em;
   opacity: 0.85;
 }
@@ -392,7 +438,7 @@
   top: 34px;
   left: 50%;
   transform: translateX(-50%);
-  width: 450px;
+  width: 480px;
   max-width: 92vw;
   max-height: 50vh;
   background: #1a1a3aee;
@@ -412,7 +458,7 @@
   padding: 0.4rem 0.8rem;
   background: #1a1a3a;
   font-weight: bold;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   border-bottom: 1px solid #444;
 }
 
@@ -421,7 +467,7 @@
   border: none;
   color: #aaa;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   padding: 0.2em 0.5em;
 }
 
@@ -437,7 +483,7 @@
 
 .log-entry {
   padding: 0.2rem 0.4rem;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: #bbb;
   border-bottom: 1px solid #1a1a2e;
 }
@@ -450,7 +496,7 @@
 }
 
 .action-label {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   margin-bottom: 0.3rem;
   color: #ffd54f;
 }
@@ -468,12 +514,12 @@
   padding: 0.5em 1.2em;
   font-weight: bold;
   min-width: 130px;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
 }
 
 .action-btn small {
   font-weight: normal;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: #aaa;
 }
 
@@ -522,7 +568,7 @@
 }
 
 .phase-text {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: #ffd54f;
 }
 
@@ -539,7 +585,7 @@
 
 .fighter-btn {
   padding: 0.4em 0.8em;
-  font-size: 0.88rem;
+  font-size: 0.92rem;
 }
 
 .fighter-btn.selected {
@@ -551,7 +597,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.88rem;
+  font-size: 0.92rem;
 }
 
 .skip-btn {
@@ -564,42 +610,45 @@
   border-top-color: #ef5350;
 }
 
-/* ---- Card Hand ---- */
+/* ---- Card Hand (bottom panel) ---- */
 .hands-area {
   background: #16162e;
   border-top: 1px solid #333;
   padding: 0.4rem 0.6rem;
+  overflow-y: auto;
+  flex-shrink: 0;
 }
 
 .card-hand-label {
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   color: #aaa;
   margin-bottom: 0.2rem;
 }
 
 .card-hand-cards {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.5rem;
   overflow-x: auto;
-  padding-bottom: 0.25rem;
+  padding-bottom: 0.3rem;
 }
 
 .card-hidden {
   color: #666;
   font-style: italic;
   padding: 0.5rem;
+  font-size: 0.88rem;
 }
 
 .game-card {
   flex-shrink: 0;
-  width: 115px;
+  width: 130px;
   border: 2px solid #444;
   border-radius: 6px;
   background: #1e1e3a;
-  padding: 0.3rem;
+  padding: 0.35rem;
   cursor: pointer;
   transition: transform 0.1s, box-shadow 0.1s, opacity 0.15s;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
 }
 
 .game-card:hover {
@@ -619,9 +668,9 @@
 
 .card-type {
   text-align: center;
-  padding: 0.12em 0;
+  padding: 0.15em 0;
   border-radius: 3px;
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   font-weight: bold;
   letter-spacing: 1px;
   color: white;
@@ -632,7 +681,7 @@
   font-weight: bold;
   text-align: center;
   margin-bottom: 0.15rem;
-  font-size: 0.82rem;
+  font-size: 0.9rem;
 }
 
 .card-value {
@@ -641,7 +690,7 @@
 }
 
 .card-val-num {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   font-weight: bold;
   color: #ffd54f;
 }
@@ -649,26 +698,26 @@
 .card-boost {
   text-align: center;
   color: #81c784;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
 }
 
 .card-qty {
   text-align: center;
   color: #78909c;
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   margin-top: 0.1rem;
 }
 
 .card-effect {
   margin-top: 0.2rem;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   color: #ce93d8;
   text-align: center;
   font-style: italic;
 }
 
 .card-restriction {
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   text-align: center;
   color: #ff8a65;
   margin-top: 0.1rem;
@@ -718,7 +767,7 @@
   background: #6d4c41;
   border-color: #a1887f;
   color: white;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   padding: 0.25em 0.8em;
   opacity: 0.9;
 }
@@ -775,9 +824,8 @@
     gap: 0.5rem;
   }
 
-  /* Keep ability text visible but compact on narrow screens */
   .hud-ability {
-    font-size: 0.72rem;
+    font-size: 0.78rem;
   }
 
   .hud-discard-section {
@@ -790,6 +838,11 @@
   }
 
   .game-card {
-    width: 100px;
+    width: 110px;
+    font-size: 0.8rem;
+  }
+
+  .card-name {
+    font-size: 0.82rem;
   }
 }

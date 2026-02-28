@@ -44,7 +44,7 @@ export const Game: React.FC = () => {
   const [logOpen, setLogOpen] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
-  // Resizable panels
+  // Resizable side panels
   const [leftWidth, setLeftWidth] = useState(220);
   const [rightWidth, setRightWidth] = useState(220);
   const resizingRef = useRef<{ side: 'left' | 'right'; startX: number; startWidth: number } | null>(null);
@@ -73,6 +73,31 @@ export const Game: React.FC = () => {
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   }, [leftWidth, rightWidth]);
+
+  // Resizable bottom panel
+  const [bottomHeight, setBottomHeight] = useState(160);
+  const bottomResizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
+
+  const handleBottomResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    bottomResizeRef.current = { startY: e.clientY, startHeight: bottomHeight };
+
+    const onMove = (ev: MouseEvent) => {
+      if (!bottomResizeRef.current) return;
+      const delta = bottomResizeRef.current.startY - ev.clientY;
+      const newH = Math.max(60, Math.min(400, bottomResizeRef.current.startHeight + delta));
+      setBottomHeight(newH);
+    };
+
+    const onUp = () => {
+      bottomResizeRef.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [bottomHeight]);
 
   // Effective game state (local or online)
   const gs: GameState | null = mode === 'online_game' ? online.gameState : gameState;
@@ -930,8 +955,11 @@ export const Game: React.FC = () => {
         </div>
       )}
 
+      {/* Bottom resize handle */}
+      <div className="resize-handle-h" onMouseDown={handleBottomResizeStart} />
+
       {/* Card hands */}
-      <div className="hands-area">
+      <div className="hands-area" style={{ height: bottomHeight }}>
         {showMyHand()}
       </div>
     </div>

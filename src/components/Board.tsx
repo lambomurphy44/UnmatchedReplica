@@ -9,9 +9,9 @@ interface BoardProps {
 
 // Colorblind-friendly zone colors (Wong palette — distinguishable by deuteranopia/protanopia)
 const ZONE_COLORS: Record<string, string> = {
-  A: '#0077BB', // Blue   — Foyer
+  A: '#C8C8D0', // White/Silver — Foyer
   B: '#EE7733', // Orange — Library
-  C: '#CCBB44', // Yellow — Sanctum
+  C: '#F5D033', // Yellow — Sanctum
   D: '#882288', // Purple — Observatory
   E: '#33BBEE', // Cyan   — Balcony
 };
