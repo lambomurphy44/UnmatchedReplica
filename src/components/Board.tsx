@@ -9,6 +9,7 @@ import harpy1Portrait from '../assets/Harpy 1.png';
 import harpy2Portrait from '../assets/Harpy 2.png';
 import harpy3Portrait from '../assets/Harpy 3.png';
 
+
 interface BoardProps {
   state: GameState;
   reachableSpaces: string[];
@@ -47,6 +48,7 @@ function getPortrait(f: Fighter): string {
   if (f.characterId === 'aang') {
     return f.isHero ? aangPortrait : appaPortrait;
   }
+
   if (f.isHero) return medusaPortrait;
 
   // Medusa has 3 distinct harpy fighters with unique art.
@@ -56,6 +58,7 @@ function getPortrait(f: Fighter): string {
 
   // Fallback for unexpected/non-numbered sidekick names.
   return harpy1Portrait;
+
 }
 
 /** Player border glow color */
