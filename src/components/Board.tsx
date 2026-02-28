@@ -5,7 +5,10 @@ import merlinPortrait from '../assets/Merlin.png';
 import aangPortrait from '../assets/Aang.png';
 import appaPortrait from '../assets/Appa.png';
 import medusaPortrait from '../assets/Medusa.png';
-import harpyPortrait from '../assets/Harpy 1.png';
+import harpy1Portrait from '../assets/Harpy 1.png';
+import harpy2Portrait from '../assets/Harpy 2.png';
+import harpy3Portrait from '../assets/Harpy 3.png';
+
 
 interface BoardProps {
   state: GameState;
@@ -45,7 +48,17 @@ function getPortrait(f: Fighter): string {
   if (f.characterId === 'aang') {
     return f.isHero ? aangPortrait : appaPortrait;
   }
-  return f.isHero ? medusaPortrait : harpyPortrait;
+
+  if (f.isHero) return medusaPortrait;
+
+  // Medusa has 3 distinct harpy fighters with unique art.
+  if (f.name.endsWith(' 1')) return harpy1Portrait;
+  if (f.name.endsWith(' 2')) return harpy2Portrait;
+  if (f.name.endsWith(' 3')) return harpy3Portrait;
+
+  // Fallback for unexpected/non-numbered sidekick names.
+  return harpy1Portrait;
+
 }
 
 /** Player border glow color */
