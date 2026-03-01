@@ -18,19 +18,19 @@ interface BoardProps {
 
 // Colorblind-friendly zone colors (Wong palette — distinguishable by deuteranopia/protanopia)
 const ZONE_COLORS: Record<string, string> = {
-  A: '#C8C8D0', // White/Silver — Foyer
-  B: '#EE7733', // Orange — Library
-  C: '#F5D033', // Yellow — Sanctum
-  D: '#882288', // Purple — Observatory
-  E: '#33BBEE', // Cyan   — Balcony
+  F: '#C8C8D0', // White/Silver — Foyer
+  L: '#EE7733', // Orange — Library
+  S: '#F5D033', // Yellow — Sanctum
+  O: '#882288', // Purple — Observatory
+  B: '#33BBEE', // Cyan   — Balcony
 };
 
 const ZONE_NAMES: Record<string, string> = {
-  A: 'Foyer',
-  B: 'Library',
-  C: 'Sanctum',
-  D: 'Observatory',
-  E: 'Balcony',
+  F: 'Foyer',
+  L: 'Library',
+  S: 'Sanctum',
+  O: 'Observatory',
+  B: 'Balcony',
 };
 
 const CELL_SIZE = 80;
