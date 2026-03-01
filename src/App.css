@@ -219,8 +219,8 @@
 .hud-fighters {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  font-size: 0.9rem;
+  gap: 0.3rem;
+  font-size: 1.1rem;
 }
 
 .hud-fighter {
@@ -237,19 +237,20 @@
 .hud-hp {
   color: #ef5350;
   font-weight: bold;
+  font-size: 1.15rem;
 }
 
 .hud-stats {
   display: flex;
   gap: 0.5rem;
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   color: #888;
   margin-top: 0.3rem;
   flex-wrap: wrap;
 }
 
 .hud-ability {
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   color: #ce93d8;
   margin-top: 0.35rem;
   font-style: italic;

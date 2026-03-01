@@ -26,14 +26,6 @@ const ZONE_COLORS: Record<string, string> = {
   B: '#33BBEE', // Cyan   — Balcony
 };
 
-const ZONE_NAMES: Record<string, string> = {
-  F: 'Foyer',
-  L: 'Library',
-  S: 'Sanctum',
-  O: 'Observatory',
-  B: 'Balcony',
-};
-
 const CELL_SIZE = 80;
 const PADDING = 50;
 const SPACE_R = 26;
@@ -169,9 +161,6 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
   const fightersOnSpace = (spaceId: string): Fighter[] =>
     fighters.filter(f => f.spaceId === spaceId && f.hp > 0);
 
-  // Collect all unique zone letters for legend
-  const allZones = Array.from(new Set(board.spaces.flatMap(s => s.zones))).sort();
-
   // Wrap space click to prevent click after drag
   const handleSpaceClickWrapped = useCallback((spaceId: string) => {
     if (didDrag.current) return;
@@ -206,16 +195,6 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
           opacity={0.5}
         />
 
-        {/* Zone legend */}
-        {allZones.map((z, i) => (
-          <g key={`legend-${z}`} transform={`translate(${10 + i * 110}, ${svgH - 20})`}>
-            <rect x={0} y={-10} width={14} height={14} rx={3} fill={ZONE_COLORS[z] || '#444'} />
-            <text x={18} y={2} fill="#ccc" fontSize={11} fontWeight="bold">
-              {ZONE_NAMES[z] || z}
-            </text>
-          </g>
-        ))}
-
         {/* Edges */}
         {board.spaces.map(space =>
           space.adjacentIds.map(adjId => {
@@ -227,7 +206,7 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
               <line
                 key={`${space.id}-${adjId}`}
                 x1={a.cx} y1={a.cy} x2={b.cx} y2={b.cy}
-                stroke="#666" strokeWidth={2.5} opacity={0.4}
+                stroke="#1a1a1a" strokeWidth={2.5} opacity={0.8}
               />
             );
           })
@@ -250,12 +229,12 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
               <circle
                 cx={cx} cy={cy} r={SPACE_R}
                 fill="none"
-                stroke={isReachable ? '#ffeb3b' : '#999'}
+                stroke={isReachable ? '#ffeb3b' : '#222'}
                 strokeWidth={isReachable ? 3 : 1.5}
               />
 
               {/* Space ID label */}
-              <text x={cx} y={cy - SPACE_R - 4} textAnchor="middle" fill="#999" fontSize={8}>
+              <text x={cx} y={cy - SPACE_R - 4} textAnchor="middle" fill="#222" fontSize={9} fontWeight="bold">
                 {space.id}
               </text>
 
@@ -292,12 +271,6 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
                       clipPath={`url(#token-${f.id})`}
                       preserveAspectRatio="xMidYMid slice"
                     />
-                    <text
-                      x={tx} y={ty + r + 10}
-                      textAnchor="middle" fill={color} fontSize={8} fontWeight="bold"
-                    >
-                      {f.hp}/{f.maxHp}
-                    </text>
                   </g>
                 );
               })}
