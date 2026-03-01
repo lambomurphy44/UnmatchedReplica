@@ -8,6 +8,7 @@ import medusaPortrait from '../assets/Medusa.png';
 import harpy1Portrait from '../assets/Harpy 1.png';
 import harpy2Portrait from '../assets/Harpy 2.png';
 import harpy3Portrait from '../assets/Harpy 3.png';
+import gameBoardBg from '../assets/Game Board.png';
 
 
 interface BoardProps {
@@ -196,6 +197,15 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
           transformOrigin: 'center center',
         }}
       >
+        {/* Board background image */}
+        <image
+          href={gameBoardBg}
+          x={0} y={0}
+          width={svgW} height={svgH}
+          preserveAspectRatio="xMidYMid slice"
+          opacity={0.5}
+        />
+
         {/* Zone legend */}
         {allZones.map((z, i) => (
           <g key={`legend-${z}`} transform={`translate(${10 + i * 110}, ${svgH - 20})`}>
