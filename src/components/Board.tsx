@@ -192,7 +192,7 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
           x={0} y={0}
           width={svgW} height={svgH}
           preserveAspectRatio="xMidYMid slice"
-          opacity={0.5}
+          opacity={0.3}
         />
 
         {/* Edges */}
@@ -206,7 +206,7 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
               <line
                 key={`${space.id}-${adjId}`}
                 x1={a.cx} y1={a.cy} x2={b.cx} y2={b.cy}
-                stroke="#1a1a1a" strokeWidth={2.5} opacity={0.8}
+                stroke="#000" strokeWidth={3} opacity={1}
               />
             );
           })
@@ -229,12 +229,13 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
               <circle
                 cx={cx} cy={cy} r={SPACE_R}
                 fill="none"
-                stroke={isReachable ? '#ffeb3b' : '#222'}
-                strokeWidth={isReachable ? 3 : 1.5}
+                stroke={isReachable ? '#ffeb3b' : '#000'}
+                strokeWidth={isReachable ? 3 : 2}
               />
 
-              {/* Space ID label */}
-              <text x={cx} y={cy - SPACE_R - 4} textAnchor="middle" fill="#222" fontSize={9} fontWeight="bold">
+              {/* Space ID label — white outline for contrast */}
+              <text x={cx} y={cy - SPACE_R - 4} textAnchor="middle" fill="#000" fontSize={11} fontWeight="bold"
+                stroke="#fff" strokeWidth={3} paintOrder="stroke">
                 {space.id}
               </text>
 
