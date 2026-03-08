@@ -116,14 +116,16 @@ export type Phase =
   | 'scheme_moveSidekick'
   | 'scheme_moveAll'          // Winged Frenzy / Command: move all your fighters
   | 'scheme_reviveHarpy'      // Winged Frenzy: place revived harpy
+  | 'aang_air_scooter_choice' // Air Scooter: choose which space to move into
   | 'aang_charge_choice'      // Sky Bison Charge: choose move or damage
   | 'aang_flying_bison_zone'  // Flying Bison: pick space in different zone
   | 'discard_excess'
   | 'gameOver';
 
 export interface QueuedEffect {
-  type: 'moveFighter' | 'opponentDiscard' | 'placeFighter' | 'pushFighter';
+  type: 'moveFighter' | 'opponentDiscard' | 'placeFighter' | 'pushFighter' | 'zoneDamage';
   playerIndex: number;
+  damageAmount?: number;  // for zoneDamage: how much damage to deal
   fighterId?: string;
   targetFighterId?: string;  // for push: the fighter being pushed
   range?: number;
@@ -178,6 +180,10 @@ export interface GameState {
   // Aang-specific: push target fighter
   pushTargetId: string | null;
   pushRange: number;
+
+  // Aang-specific: Air Scooter space choice
+  airScooterSpaces: string[];
+  airScooterDefenderId: string | null;
 
   // Aang-specific: deck search choices (Meditate)
   searchCards: Card[];

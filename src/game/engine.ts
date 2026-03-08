@@ -134,6 +134,8 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
     turnStartSpaces,
     pushTargetId: null,
     pushRange: 0,
+    airScooterSpaces: [],
+    airScooterDefenderId: null,
     searchCards: [],
   };
 
@@ -211,19 +213,13 @@ export function getReachableSpaces(board: BoardMap, fromId: string, steps: numbe
   return Array.from(visited);
 }
 
-/** Find a shared adjacent space between two spaces (for Air Scooter). Returns the space ID or null. */
-export function getSpaceBetween(board: BoardMap, spaceA: string, spaceB: string, fighters: Fighter[], movingId: string): string | null {
+/** Find ALL shared adjacent spaces between two spaces (for Air Scooter). Returns space IDs. */
+export function getSpacesBetween(board: BoardMap, spaceA: string, spaceB: string, fighters: Fighter[], movingId: string): string[] {
   const sa = getSpace(board, spaceA);
   const sb = getSpace(board, spaceB);
-  if (!sa || !sb) return null;
+  if (!sa || !sb) return [];
   const occupied = new Set(fighters.filter(f => f.hp > 0 && f.id !== movingId).map(f => f.spaceId));
-  // Find an unoccupied space adjacent to both
-  for (const adjId of sa.adjacentIds) {
-    if (sb.adjacentIds.includes(adjId) && !occupied.has(adjId)) {
-      return adjId;
-    }
-  }
-  return null;
+  return sa.adjacentIds.filter(adjId => sb.adjacentIds.includes(adjId) && !occupied.has(adjId));
 }
 
 export function canAttack(board: BoardMap, attacker: Fighter, defender: Fighter, fighters?: Fighter[]): boolean {
@@ -234,7 +230,7 @@ export function canAttack(board: BoardMap, attacker: Fighter, defender: Fighter,
   // Aang's Air Scooter: can attack from 1 space away if there's an unoccupied space between
   if (attacker.isHero && attacker.characterId === 'aang' && fighters) {
     if (!areAdjacent(board, attacker.spaceId, defender.spaceId)) {
-      return getSpaceBetween(board, attacker.spaceId, defender.spaceId, fighters, attacker.id) !== null;
+      return getSpacesBetween(board, attacker.spaceId, defender.spaceId, fighters, attacker.id).length > 0;
     }
   }
   return areAdjacent(board, attacker.spaceId, defender.spaceId);
@@ -587,11 +583,19 @@ export function selectAttackTarget(state: GameState, defenderId: string): GameSt
   // Air Scooter: if Aang is attacking from 1 space away, move to space between
   let airScooterUsed = false;
   if (attacker.isHero && attacker.characterId === 'aang' && !areAdjacent(s.board, attacker.spaceId, defender.spaceId)) {
-    const between = getSpaceBetween(s.board, attacker.spaceId, defender.spaceId, s.fighters, attacker.id);
-    if (between) {
-      addLog(s, `Air Scooter! Aang zips to ${between} between the fighters!`);
-      attacker.spaceId = between;
+    const betweenSpaces = getSpacesBetween(s.board, attacker.spaceId, defender.spaceId, s.fighters, attacker.id);
+    if (betweenSpaces.length === 1) {
+      // Only one valid space — auto-select
+      addLog(s, `Air Scooter! Aang zips to ${betweenSpaces[0]} between the fighters!`);
+      attacker.spaceId = betweenSpaces[0];
       airScooterUsed = true;
+    } else if (betweenSpaces.length > 1) {
+      // Multiple valid spaces — prompt the player to choose
+      s.airScooterSpaces = betweenSpaces;
+      s.airScooterDefenderId = defenderId;
+      s.phase = 'aang_air_scooter_choice';
+      addLog(s, `Air Scooter! Choose which space Aang moves into.`);
+      return s;
     }
   }
 
@@ -607,6 +611,40 @@ export function selectAttackTarget(state: GameState, defenderId: string): GameSt
     damageDealt: 0,
     attackerWon: false,
     airScooterUsed,
+  };
+  s.phase = 'attack_selectCard';
+  addLog(s, `${attacker.name} attacks ${defender.name}! Choose an attack card.`);
+  return s;
+}
+
+export function resolveAirScooterChoice(state: GameState, spaceId: string): GameState {
+  const s = clone(state);
+  if (!s.airScooterSpaces.includes(spaceId) || !s.airScooterDefenderId) return s;
+
+  const attacker = getFighter(s, s.selectedFighter!)!;
+  const defenderId = s.airScooterDefenderId;
+  const defender = getFighter(s, defenderId)!;
+
+  addLog(s, `Air Scooter! Aang zips to ${spaceId} between the fighters!`);
+  attacker.spaceId = spaceId;
+
+  // Clear Air Scooter state
+  s.airScooterSpaces = [];
+  s.airScooterDefenderId = null;
+
+  // Continue with combat setup (same as end of selectAttackTarget)
+  s.combat = {
+    attackerId: s.selectedFighter!,
+    defenderId,
+    attackCard: null,
+    defenseCard: null,
+    attackBoostCard: null,
+    duringCombatBoost: null,
+    attackerEffectsCancelled: false,
+    defenderEffectsCancelled: false,
+    damageDealt: 0,
+    attackerWon: false,
+    airScooterUsed: true,
   };
   s.phase = 'attack_selectCard';
   addLog(s, `${attacker.name} attacks ${defender.name}! Choose an attack card.`);
@@ -1210,20 +1248,15 @@ function processAfterCombatEffect(
     }
 
     case 'zoneDamageAllEnemies': {
-      // Avatar State: deal N damage to each enemy fighter in Aang's zone
+      // Avatar State: queue zone damage so it respects defender-first ordering
       const hero = getHero(state, selfPlayer.index);
       if (hero && hero.hp > 0) {
-        const enemies = getAliveFighters(state, opponentPlayer.index).filter(f =>
-          sameZone(state.board, hero.spaceId, f.spaceId)
-        );
-        for (const enemy of enemies) {
-          enemy.hp = Math.max(0, enemy.hp - (effect.amount || 2));
-          addLog(state, `Avatar State deals ${effect.amount || 2} damage to ${enemy.name}! (${enemy.hp} HP)`);
-        }
-        if (enemies.length === 0) {
-          addLog(state, `Avatar State: No enemy fighters in Aang's zone.`);
-        }
-        checkHeroDeath(state);
+        queue.push({
+          type: 'zoneDamage',
+          playerIndex: selfPlayer.index,
+          damageAmount: effect.amount || 2,
+          label: `Avatar State: Deal ${effect.amount || 2} damage to each enemy fighter in Aang's zone.`,
+        });
       }
       break;
     }
@@ -1291,6 +1324,28 @@ function processNextEffect(state: GameState): GameState {
       state.phase = 'effect_pushFighter';
       addLog(state, effect.label);
       break;
+
+    case 'zoneDamage': {
+      // Avatar State zone damage — auto-resolves (no user interaction needed)
+      const hero = getHero(state, effect.playerIndex);
+      const opponentIdx = effect.playerIndex === 0 ? 1 : 0;
+      if (hero && hero.hp > 0) {
+        const enemies = getAliveFighters(state, opponentIdx).filter(f =>
+          sameZone(state.board, hero.spaceId, f.spaceId)
+        );
+        const dmg = effect.damageAmount || 2;
+        for (const enemy of enemies) {
+          enemy.hp = Math.max(0, enemy.hp - dmg);
+          addLog(state, `Avatar State deals ${dmg} damage to ${enemy.name}! (${enemy.hp} HP)`);
+        }
+        if (enemies.length === 0) {
+          addLog(state, `Avatar State: No enemy fighters in Aang's zone.`);
+        }
+        checkHeroDeath(state);
+      }
+      // Continue to next queued effect (no phase change / user input needed)
+      return processNextEffect(state);
+    }
   }
 
   return state;

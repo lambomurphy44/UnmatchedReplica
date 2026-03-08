@@ -227,6 +227,10 @@ export const Game: React.FC = () => {
       }
       return;
     }
+    if (gs.phase === 'aang_air_scooter_choice') {
+      act('resolveAirScooterChoice', { spaceId });
+      return;
+    }
     if (gs.phase === 'effect_moveFighter') {
       act('resolveEffectMove', { spaceId });
       return;
@@ -307,6 +311,9 @@ export const Game: React.FC = () => {
           : f.moveValue + gs.maneuverBoost;
         return getReachableSpaces(gs.board, f.spaceId, range, gs.fighters, f.id);
       }
+    }
+    if (gs.phase === 'aang_air_scooter_choice') {
+      return gs.airScooterSpaces;
     }
     if (gs.phase === 'attack_selectTarget' && gs.selectedFighter) {
       return getValidTargets(gs, gs.selectedFighter).map(t => t.spaceId);
@@ -797,6 +804,12 @@ export const Game: React.FC = () => {
         <div className="phase-prompt">
           <div className="phase-text">Click a highlighted space to select attack target.</div>
           <button className="skip-btn" onClick={() => act('cancelAttackTarget')}>Cancel</button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'aang_air_scooter_choice' && (
+        <div className="phase-prompt">
+          <div className="phase-text">Air Scooter: Choose which space Aang moves into.</div>
         </div>
       )}
 

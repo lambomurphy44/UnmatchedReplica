@@ -2,7 +2,8 @@ import type { GameState } from './types';
 import {
   startManeuver, applyManeuverBoost, selectManeuverFighter,
   executeManeuverMove, skipFighterMove, skipAllManeuverMoves,
-  startAttack, selectAttackTarget, selectAttackCard, selectDefenseCard,
+  startAttack, selectAttackTarget, resolveAirScooterChoice,
+  selectAttackCard, selectDefenseCard,
   selectArthurBoostCard, selectDuringCombatBoost,
   resolveEffectMove, skipEffectMove, resolveEffectDiscard, resolveEffectPlace,
   resolveEffectPush, skipEffectPush,
@@ -46,6 +47,8 @@ export function dispatchAction(state: GameState, actionType: string, args: Recor
         return startAttack(state, args.fighterId as string);
       case 'selectAttackTarget':
         return selectAttackTarget(state, args.defenderId as string);
+      case 'resolveAirScooterChoice':
+        return resolveAirScooterChoice(state, args.spaceId as string);
       case 'selectAttackCard':
         return selectAttackCard(state, args.cardId as string);
       case 'selectArthurBoostCard':
