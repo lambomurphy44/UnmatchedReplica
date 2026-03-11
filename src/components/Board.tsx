@@ -10,6 +10,10 @@ import harpy2Portrait from '../assets/Harpy 2.png';
 import harpy3Portrait from '../assets/Harpy 3.png';
 import gameBoardBg from '../assets/Game Board.png';
 
+// Mewtwo portraits not yet available — use placeholder text rendering
+const MEWTWO_PLACEHOLDER = 'mewtwo_placeholder';
+const CLONE_PLACEHOLDER = 'clone_placeholder';
+
 
 interface BoardProps {
   state: GameState;
@@ -33,13 +37,16 @@ const SPACE_R = 26;
 const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 3;
 
-/** Map fighter to its portrait PNG path */
+/** Map fighter to its portrait PNG path (or placeholder string) */
 function getPortrait(f: Fighter): string {
   if (f.characterId === 'king_arthur') {
     return f.isHero ? kingArthurPortrait : merlinPortrait;
   }
   if (f.characterId === 'aang') {
     return f.isHero ? aangPortrait : appaPortrait;
+  }
+  if (f.characterId === 'mewtwo') {
+    return f.isHero ? MEWTWO_PLACEHOLDER : CLONE_PLACEHOLDER;
   }
 
   if (f.isHero) return medusaPortrait;
@@ -258,20 +265,38 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
                 const color = getPlayerColor(f.owner);
                 const portrait = getPortrait(f);
 
+                const isPlaceholder = portrait === MEWTWO_PLACEHOLDER || portrait === CLONE_PLACEHOLDER;
+
                 return (
                   <g key={f.id}>
                     <circle cx={tx} cy={ty} r={r + 2} fill="none" stroke={color} strokeWidth={2.5} />
-                    <circle cx={tx} cy={ty} r={r} fill="#222" />
-                    <clipPath id={`token-${f.id}`}>
-                      <circle cx={tx} cy={ty} r={r} />
-                    </clipPath>
-                    <image
-                      href={portrait}
-                      x={tx - r} y={ty - r}
-                      width={r * 2} height={r * 2}
-                      clipPath={`url(#token-${f.id})`}
-                      preserveAspectRatio="xMidYMid slice"
-                    />
+                    <circle cx={tx} cy={ty} r={r} fill={isPlaceholder ? (portrait === MEWTWO_PLACEHOLDER ? '#7b3fa0' : '#a855c8') : '#222'} />
+                    {isPlaceholder ? (
+                      <text
+                        x={tx} y={ty + 1}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill="white"
+                        fontSize={portrait === MEWTWO_PLACEHOLDER ? 9 : 7}
+                        fontWeight="bold"
+                        style={{ pointerEvents: 'none', userSelect: 'none' }}
+                      >
+                        {portrait === MEWTWO_PLACEHOLDER ? 'M2' : 'CL'}
+                      </text>
+                    ) : (
+                      <>
+                        <clipPath id={`token-${f.id}`}>
+                          <circle cx={tx} cy={ty} r={r} />
+                        </clipPath>
+                        <image
+                          href={portrait}
+                          x={tx - r} y={ty - r}
+                          width={r * 2} height={r * 2}
+                          clipPath={`url(#token-${f.id})`}
+                          preserveAspectRatio="xMidYMid slice"
+                        />
+                      </>
+                    )}
                   </g>
                 );
               })}

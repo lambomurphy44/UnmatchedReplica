@@ -100,8 +100,9 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
     },
   ];
 
-  const unplacedP0 = fighters0.filter(f => f.spaceId === '');
-  const unplacedP1 = fighters1.filter(f => f.spaceId === '');
+  // Mewtwo's clones start off-board (not placed during setup)
+  const unplacedP0 = fighters0.filter(f => f.spaceId === '' && char0.id !== 'mewtwo');
+  const unplacedP1 = fighters1.filter(f => f.spaceId === '' && char1.id !== 'mewtwo');
   const needsPlacement = unplacedP0.length > 0 || unplacedP1.length > 0;
 
   // Record starting positions
@@ -137,6 +138,11 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
     airScooterSpaces: [],
     airScooterDefenderId: null,
     searchCards: [],
+    mewtwoReflectActive: [false, false],
+    mewtwoCloneBatchRemaining: 0,
+    mewtwoCloneVatsUsed: false,
+    mewtwoCloneRushCards: [],
+    mewtwoCloneRushPlayerIndex: null,
   };
 
   if (needsPlacement) {
@@ -380,6 +386,34 @@ function checkStartOfTurnAbility(state: GameState) {
       }
     }
   }
+  if (charDef.id === 'mewtwo') {
+    state.mewtwoCloneVatsUsed = false;
+    // Check Reflect: if no clones alive, discard Reflect
+    const playerIdx = state.currentPlayer;
+    if (state.mewtwoReflectActive[playerIdx]) {
+      const clones = state.fighters.filter(f => f.owner === playerIdx && !f.isHero && f.characterId === 'mewtwo' && f.hp > 0 && f.spaceId !== '');
+      if (clones.length === 0) {
+        state.mewtwoReflectActive[playerIdx] = false;
+        addLog(state, `Reflect fades — Mewtwo controls no Clones.`);
+      }
+    }
+    // Clone Vats: if player has cards in hand, offer to discard
+    const player = state.players[playerIdx];
+    const hero = getHero(state, playerIdx);
+    if (hero && hero.hp > 0 && player.hand.length > 0) {
+      // Check if there's a dead or off-board clone to place
+      const availableClone = state.fighters.find(f =>
+        f.owner === playerIdx && !f.isHero && f.characterId === 'mewtwo' && (f.hp <= 0 || f.spaceId === '')
+      );
+      if (availableClone) {
+        const adjacentSpaces = getMewtwoAdjacentSpaces(state, playerIdx);
+        if (adjacentSpaces.length > 0) {
+          state.phase = 'mewtwo_cloneVats';
+          addLog(state, `Clone Vats: You may discard 1 card to place a Clone adjacent to Mewtwo.`);
+        }
+      }
+    }
+  }
 }
 
 function endTurn(state: GameState) {
@@ -399,6 +433,9 @@ function finishEndTurn(state: GameState) {
   state.maneuverBoost = 0;
   state.maneuverFightersToMove = [];
   state.maneuverCurrentFighter = null;
+  state.mewtwoCloneBatchRemaining = 0;
+  state.mewtwoCloneRushCards = [];
+  state.mewtwoCloneRushPlayerIndex = null;
   state.phase = 'playing';
   addLog(state, `--- ${state.players[state.currentPlayer].name}'s turn ---`);
   recordTurnStartPositions(state);
@@ -820,6 +857,49 @@ function resolveCombat(state: GameState): GameState {
           checkHeroDeath(s);
         }
       }
+      // Mewtwo: Cloned Instincts — cancel opponent's effects if flanked
+      if (effect.type === 'cancelIfFlanked') {
+        const opponent = getFighter(s, s.combat.defenderId)!;
+        if (isFlankedByClones(s, opponent.id, attacker.owner)) {
+          s.combat.defenderEffectsCancelled = true;
+          addLog(s, `Cloned Instincts: ${opponent.name} is flanked by Clones — all effects on defender's card are cancelled!`);
+        }
+      }
+      // Mewtwo: Psychic Storm — place a clone adjacent to opponent
+      if (effect.type === 'placeCloneAdjacentOpponent') {
+        const opponent = getFighter(s, s.combat.defenderId)!;
+        const cloneFighter = getAvailableClone(s, attacker.owner);
+        if (cloneFighter) {
+          const adjSpaces = getAdjacentSpacesOf(s, opponent.id);
+          if (adjSpaces.length > 0) {
+            // Auto-place on first available adjacent space
+            const targetSpace = adjSpaces[0];
+            if (cloneFighter.hp <= 0) cloneFighter.hp = cloneFighter.maxHp;
+            cloneFighter.spaceId = targetSpace;
+            addLog(s, `Psychic Storm: ${cloneFighter.name} placed on ${targetSpace} adjacent to ${opponent.name}!`);
+          } else {
+            addLog(s, `Psychic Storm: No adjacent spaces available near ${opponent.name}.`);
+          }
+        } else {
+          addLog(s, `Psychic Storm: No Clones available to place.`);
+        }
+      }
+      // Mewtwo: Calm Focus — recycle discard
+      if (effect.type === 'recycleDiscard') {
+        const count = Math.min(effect.amount || 3, atkPlayer.discard.length);
+        for (let i = 0; i < count; i++) {
+          const card = atkPlayer.discard.pop()!;
+          atkPlayer.deck.push(card);
+        }
+        if (count > 0) {
+          atkPlayer.deck = shuffle(atkPlayer.deck);
+          addLog(s, `Calm Focus: Returned ${count} card(s) from discard to deck and shuffled.`);
+        }
+      }
+      // Mewtwo: Psychic Barrier — prevent effect damage
+      if (effect.type === 'preventEffectDamage') {
+        addLog(s, `Psychic Barrier: Effect damage is prevented this combat.`);
+      }
     }
   }
 
@@ -840,6 +920,60 @@ function resolveCombat(state: GameState): GameState {
           const topDef = getCardDef(topCard, defCharDef);
           addLog(s, `Avatar State: Discarded ${topDef?.name || 'a card'} from top of deck.`);
         }
+      }
+      // Mewtwo: Cloned Instincts — cancel attacker's effects if flanked
+      if (effect.type === 'cancelIfFlanked') {
+        if (isFlankedByClones(s, attacker.id, defender.owner)) {
+          s.combat.attackerEffectsCancelled = true;
+          addLog(s, `Cloned Instincts: ${attacker.name} is flanked by Clones — all effects on attacker's card are cancelled!`);
+        }
+      }
+      // Mewtwo: Psychic Storm — place clone adjacent to opponent (when used as defense)
+      if (effect.type === 'placeCloneAdjacentOpponent') {
+        const cloneFighter = getAvailableClone(s, defender.owner);
+        if (cloneFighter) {
+          const adjSpaces = getAdjacentSpacesOf(s, attacker.id);
+          if (adjSpaces.length > 0) {
+            const targetSpace = adjSpaces[0];
+            if (cloneFighter.hp <= 0) cloneFighter.hp = cloneFighter.maxHp;
+            cloneFighter.spaceId = targetSpace;
+            addLog(s, `Psychic Storm: ${cloneFighter.name} placed on ${targetSpace} adjacent to ${attacker.name}!`);
+          }
+        }
+      }
+      // Mewtwo: Calm Focus — recycle discard
+      if (effect.type === 'recycleDiscard') {
+        const count = Math.min(effect.amount || 3, defPlayer.discard.length);
+        for (let i = 0; i < count; i++) {
+          const card = defPlayer.discard.pop()!;
+          defPlayer.deck.push(card);
+        }
+        if (count > 0) {
+          defPlayer.deck = shuffle(defPlayer.deck);
+          addLog(s, `Calm Focus: Returned ${count} card(s) from discard to deck and shuffled.`);
+        }
+      }
+      // Mewtwo: Psychic Barrier — prevent effect damage
+      if (effect.type === 'preventEffectDamage') {
+        addLog(s, `Psychic Barrier: Effect damage is prevented this combat.`);
+      }
+      // Mewtwo: Sacrificial Block
+      if (effect.type === 'sacrificialBlock') {
+        // Defeat this clone
+        defender.hp = 0;
+        addLog(s, `Sacrificial Block: ${defender.name} is defeated!`);
+        // Draw 1 card
+        drawCards(s, defPlayer.index, 1);
+        addLog(s, `${defPlayer.name} draws 1 card.`);
+        // Deal 1 damage to attacking fighter
+        if (attacker.hp > 0) {
+          attacker.hp = Math.max(0, attacker.hp - 1);
+          addLog(s, `Sacrificial Block: Deals 1 damage to ${attacker.name}! (${attacker.hp} HP)`);
+          checkHeroDeath(s);
+        }
+        // Cancel all effects on attacker's card
+        s.combat.attackerEffectsCancelled = true;
+        addLog(s, `Sacrificial Block: All effects on attacker's card are cancelled!`);
       }
     }
   }
@@ -954,6 +1088,57 @@ function resolveCombatDamage(state: GameState): GameState {
     }
   }
 
+  // Mewtwo: Psystrike +1 per clone (attacker)
+  if (!s.combat.attackerEffectsCancelled && atkCardDef) {
+    for (const effect of atkCardDef.effects) {
+      if (effect.timing === 'duringCombat' && effect.type === 'plusPerClone') {
+        const cloneCount = countAliveClones(s, attacker.owner);
+        if (cloneCount > 0) {
+          atkValue += cloneCount * (effect.amount || 1);
+          addLog(s, `Psystrike: +${cloneCount} for ${cloneCount} Clone(s)!`);
+        }
+      }
+      if (effect.timing === 'duringCombat' && effect.type === 'plusIfCloneAdjacent') {
+        const clones = s.fighters.filter(f =>
+          f.owner === attacker.owner && !f.isHero && f.characterId === 'mewtwo' && f.hp > 0 && f.spaceId !== ''
+        );
+        const hasAdj = clones.some(c => areAdjacent(s.board, defender.spaceId, c.spaceId));
+        if (hasAdj) {
+          atkValue += effect.amount || 2;
+          addLog(s, `Swarm Tactics: +${effect.amount || 2} (Clone adjacent to opponent)!`);
+        }
+      }
+    }
+  }
+  // Mewtwo: Psystrike/Swarm Tactics on defense (versatile cards)
+  if (!s.combat.defenderEffectsCancelled && defCardDef) {
+    for (const effect of defCardDef.effects) {
+      if (effect.timing === 'duringCombat' && effect.type === 'plusPerClone') {
+        const cloneCount = countAliveClones(s, defender.owner);
+        if (cloneCount > 0) {
+          defValue += cloneCount * (effect.amount || 1);
+          addLog(s, `Psystrike: +${cloneCount} for ${cloneCount} Clone(s)!`);
+        }
+      }
+      if (effect.timing === 'duringCombat' && effect.type === 'plusIfCloneAdjacent') {
+        const clones = s.fighters.filter(f =>
+          f.owner === defender.owner && !f.isHero && f.characterId === 'mewtwo' && f.hp > 0 && f.spaceId !== ''
+        );
+        const hasAdj = clones.some(c => areAdjacent(s.board, attacker.spaceId, c.spaceId));
+        if (hasAdj) {
+          defValue += effect.amount || 2;
+          addLog(s, `Swarm Tactics: +${effect.amount || 2} (Clone adjacent to opponent)!`);
+        }
+      }
+    }
+  }
+
+  // Mewtwo: Reflect — Mewtwo takes 1 less damage (applies to defender if Mewtwo)
+  let reflectReduction = 0;
+  if (defender.isHero && defender.characterId === 'mewtwo' && s.mewtwoReflectActive[defender.owner]) {
+    reflectReduction = 1;
+  }
+
   // Check for preventDamage (Bewilderment)
   let preventDamage = false;
   if (!s.combat.defenderEffectsCancelled && defCardDef) {
@@ -965,7 +1150,11 @@ function resolveCombatDamage(state: GameState): GameState {
   }
 
   // ===== PHASE 3: DAMAGE =====
-  const damage = preventDamage ? 0 : Math.max(0, atkValue - defValue);
+  let damage = preventDamage ? 0 : Math.max(0, atkValue - defValue);
+  if (reflectReduction > 0 && damage > 0) {
+    damage = Math.max(0, damage - reflectReduction);
+    addLog(s, `Reflect reduces damage by ${reflectReduction}!`);
+  }
   s.combat.damageDealt = damage;
   s.combat.attackerWon = atkValue > defValue;
 
@@ -998,6 +1187,12 @@ function resolveCombatDamage(state: GameState): GameState {
   // Process attacker's after-combat effects
   for (const effect of atkAfter) {
     processAfterCombatEffect(s, effect, attacker, defender, atkPlayer, defPlayer, attackerWon, effectQueue);
+  }
+
+  // Mewtwo Clone Vats ability: if attacker was a Clone and won, draw 1 card
+  if (attackerWon && !attacker.isHero && attacker.characterId === 'mewtwo') {
+    drawCards(s, atkPlayer.index, 1);
+    addLog(s, `Clone Vats: Clone won combat — ${atkPlayer.name} draws 1 card!`);
   }
 
   // Discard combat cards
@@ -1260,6 +1455,63 @@ function processAfterCombatEffect(
       }
       break;
     }
+
+    // ---- Mewtwo-specific after-combat effects ----
+
+    case 'opponentDiscardsRandomIfWon':
+      // Mind Crush: if won, opponent discards 1 random card
+      if (selfWon && opponentPlayer.hand.length > 0) {
+        const randIdx = Math.floor(Math.random() * opponentPlayer.hand.length);
+        const discarded = opponentPlayer.hand.splice(randIdx, 1)[0];
+        opponentPlayer.discard.push(discarded);
+        const charDef = getCharDef(opponentPlayer.characterId);
+        const def = getCardDef(discarded, charDef);
+        addLog(state, `Mind Crush: ${opponentPlayer.name} discards ${def?.name || 'a card'} at random!`);
+      }
+      break;
+
+    case 'moveAllClones': {
+      // Sever the Link: move each clone up to N spaces
+      const clones = state.fighters.filter(f =>
+        f.owner === selfPlayer.index && !f.isHero && f.characterId === 'mewtwo' && f.hp > 0 && f.spaceId !== ''
+      );
+      for (const cloneFighter of clones) {
+        queue.push({
+          type: 'moveFighter',
+          playerIndex: selfPlayer.index,
+          fighterId: cloneFighter.id,
+          range: effect.amount || 2,
+          label: `Move ${cloneFighter.name} up to ${effect.amount || 2} spaces.`,
+        });
+      }
+      break;
+    }
+
+    case 'cloneRushDiscard': {
+      // Clone Rush: if flanked, choose from opponent's hand; otherwise random discard
+      if (isFlankedByClones(state, opponent.id, selfPlayer.index)) {
+        if (opponentPlayer.hand.length > 0) {
+          state.mewtwoCloneRushCards = [...opponentPlayer.hand];
+          state.mewtwoCloneRushPlayerIndex = opponentPlayer.index;
+          queue.push({
+            type: 'opponentDiscard',
+            playerIndex: selfPlayer.index, // The Mewtwo player chooses
+            label: `Clone Rush: ${opponent.name} is flanked! Choose a card from ${opponentPlayer.name}'s hand to discard.`,
+          });
+        }
+      } else {
+        // Random discard
+        if (opponentPlayer.hand.length > 0) {
+          const randIdx = Math.floor(Math.random() * opponentPlayer.hand.length);
+          const discarded = opponentPlayer.hand.splice(randIdx, 1)[0];
+          opponentPlayer.discard.push(discarded);
+          const charDef = getCharDef(opponentPlayer.characterId);
+          const def = getCardDef(discarded, charDef);
+          addLog(state, `Clone Rush: ${opponentPlayer.name} discards ${def?.name || 'a card'} at random.`);
+        }
+      }
+      break;
+    }
   }
 }
 
@@ -1308,7 +1560,12 @@ function processNextEffect(state: GameState): GameState {
       break;
 
     case 'opponentDiscard':
-      state.phase = 'effect_opponentDiscard';
+      // Clone Rush: if mewtwoCloneRushCards is set, the current player chooses
+      if (state.mewtwoCloneRushCards.length > 0) {
+        state.phase = 'mewtwo_cloneRush_discard';
+      } else {
+        state.phase = 'effect_opponentDiscard';
+      }
       addLog(state, effect.label);
       break;
 
@@ -1678,6 +1935,62 @@ export function playScheme(state: GameState, cardId: string): GameState {
       break;
     }
 
+    // --- Mewtwo schemes ---
+    case 'mewtwo_reflect': {
+      // Put this card in play area (don't discard)
+      s.mewtwoReflectActive[s.currentPlayer] = true;
+      addLog(s, `Reflect is now active! Mewtwo takes 1 less damage from attacks while Clones are in play.`);
+      // Don't push to discard — it stays in play area
+      if (s.phase !== 'gameOver') {
+        useAction(s);
+      }
+      return s;
+    }
+
+    case 'mewtwo_teleport': {
+      // Move Mewtwo up to 5 spaces (through fighters), draw 1, gain 1 action
+      s.pendingSchemeCard = card;
+      s.phase = 'mewtwo_teleport_move';
+      addLog(s, `Teleport: Move Mewtwo up to 5 spaces (may move through other fighters).`);
+      return s;
+    }
+
+    case 'mewtwo_clone_batch': {
+      // Mewtwo loses 1 HP, place up to 2 clones adjacent, draw 1
+      const hero = getHero(s, s.currentPlayer);
+      if (hero && hero.hp > 0) {
+        hero.hp = Math.max(0, hero.hp - 1);
+        addLog(s, `Clone Batch: Mewtwo loses 1 health! (${hero.hp} HP)`);
+        checkHeroDeath(s);
+        if (s.phase === 'gameOver') return s;
+
+        const availableClone = getAvailableClone(s, s.currentPlayer);
+        const adjacentSpaces = getMewtwoAdjacentSpaces(s, s.currentPlayer);
+        if (availableClone && adjacentSpaces.length > 0) {
+          s.pendingSchemeCard = card;
+          s.mewtwoCloneBatchRemaining = 2;
+          s.phase = 'mewtwo_cloneBatch_place';
+          addLog(s, `Place up to 2 Clones in spaces adjacent to Mewtwo.`);
+          return s;
+        }
+        addLog(s, `No Clones or adjacent spaces available.`);
+        drawCards(s, s.currentPlayer, 1);
+        addLog(s, `Clone Batch: Drew 1 card.`);
+      }
+      break;
+    }
+
+    case 'mewtwo_recover': {
+      // Recover 2 HP (or 3 if 6 or less)
+      const hero = getHero(s, s.currentPlayer);
+      if (hero && hero.hp > 0) {
+        const amount = hero.hp <= 6 ? 3 : 2;
+        hero.hp = Math.min(hero.maxHp, hero.hp + amount);
+        addLog(s, `Recover: Mewtwo recovers ${amount} health! (${hero.hp}/${hero.maxHp} HP)`);
+      }
+      break;
+    }
+
     default:
       addLog(s, `Scheme has no programmed effect.`);
       break;
@@ -1919,4 +2232,247 @@ export function getPlaceFighterSpaces(state: GameState): string[] {
   return state.board.spaces
     .filter(sp => !isSpaceOccupied(state, sp.id, fighterId || undefined))
     .map(sp => sp.id);
+}
+
+// =============================================
+// MEWTWO — Clone helpers and abilities
+// =============================================
+
+/** Get unoccupied spaces adjacent to Mewtwo */
+export function getMewtwoAdjacentSpaces(state: GameState, playerIndex: number): string[] {
+  const hero = getHero(state, playerIndex);
+  if (!hero || hero.hp <= 0) return [];
+  const heroSpace = getSpace(state.board, hero.spaceId);
+  if (!heroSpace) return [];
+  return heroSpace.adjacentIds.filter(adjId => !isSpaceOccupied(state, adjId));
+}
+
+/** Check if a fighter is flanked by clones (adjacent to 2+ clones of the opposing player) */
+function isFlankedByClones(state: GameState, fighterId: string, cloneOwner: number): boolean {
+  const fighter = getFighter(state, fighterId);
+  if (!fighter) return false;
+  const clones = state.fighters.filter(f =>
+    f.owner === cloneOwner && !f.isHero && f.characterId === 'mewtwo' && f.hp > 0 && f.spaceId !== ''
+  );
+  const adjacentClones = clones.filter(c => areAdjacent(state.board, fighter.spaceId, c.spaceId));
+  return adjacentClones.length >= 2;
+}
+
+/** Revive and return a clone fighter (or null if none available) */
+function getAvailableClone(state: GameState, playerIndex: number): Fighter | null {
+  return state.fighters.find(f =>
+    f.owner === playerIndex && !f.isHero && f.characterId === 'mewtwo' && (f.hp <= 0 || f.spaceId === '')
+  ) || null;
+}
+
+/** Count alive clones on the board */
+function countAliveClones(state: GameState, playerIndex: number): number {
+  return state.fighters.filter(f =>
+    f.owner === playerIndex && !f.isHero && f.characterId === 'mewtwo' && f.hp > 0 && f.spaceId !== ''
+  ).length;
+}
+
+// ---- Clone Vats (start of turn ability) ----
+
+export function useCloneVats(state: GameState, cardId: string): GameState {
+  const s = clone(state);
+  const player = s.players[s.currentPlayer];
+  const cardIdx = player.hand.findIndex(c => c.id === cardId);
+  if (cardIdx < 0) return s;
+
+  const card = player.hand.splice(cardIdx, 1)[0];
+  player.discard.push(card);
+  const charDef = getCharDef(player.characterId);
+  const def = getCardDef(card, charDef);
+  addLog(s, `Clone Vats: Discarded ${def?.name || 'a card'}.`);
+
+  s.mewtwoCloneVatsUsed = true;
+
+  // Now place a clone adjacent to Mewtwo
+  const adjacentSpaces = getMewtwoAdjacentSpaces(s, s.currentPlayer);
+  if (adjacentSpaces.length > 0) {
+    s.phase = 'mewtwo_placeClone';
+    addLog(s, `Place a Clone on a space adjacent to Mewtwo.`);
+  } else {
+    addLog(s, `No adjacent spaces available for Clone placement.`);
+    s.phase = 'playing';
+  }
+  return s;
+}
+
+export function skipCloneVats(state: GameState): GameState {
+  const s = clone(state);
+  addLog(s, `Clone Vats: Skipped.`);
+  s.mewtwoCloneVatsUsed = true;
+  s.phase = 'playing';
+  return s;
+}
+
+export function placeClone(state: GameState, spaceId: string): GameState {
+  const s = clone(state);
+  const playerIdx = s.currentPlayer;
+  const cloneFighter = getAvailableClone(s, playerIdx);
+  if (!cloneFighter) return s;
+
+  if (isSpaceOccupied(s, spaceId)) return s;
+
+  // Revive if dead
+  if (cloneFighter.hp <= 0) {
+    cloneFighter.hp = cloneFighter.maxHp;
+  }
+  cloneFighter.spaceId = spaceId;
+  addLog(s, `${cloneFighter.name} placed on ${spaceId}.`);
+
+  // Check what phase we came from
+  if (s.phase === 'mewtwo_placeClone') {
+    s.phase = 'playing';
+  } else if (s.phase === 'mewtwo_cloneBatch_place') {
+    s.mewtwoCloneBatchRemaining--;
+    if (s.mewtwoCloneBatchRemaining > 0) {
+      // Check if there's another clone to place and adjacent space available
+      const nextClone = getAvailableClone(s, playerIdx);
+      const adjacentSpaces = getMewtwoAdjacentSpaces(s, playerIdx);
+      if (nextClone && adjacentSpaces.length > 0) {
+        addLog(s, `Place another Clone adjacent to Mewtwo.`);
+      } else {
+        s.mewtwoCloneBatchRemaining = 0;
+        finishCloneBatch(s);
+      }
+    } else {
+      finishCloneBatch(s);
+    }
+  }
+
+  return s;
+}
+
+export function skipClonePlacement(state: GameState): GameState {
+  const s = clone(state);
+  if (s.phase === 'mewtwo_cloneBatch_place') {
+    s.mewtwoCloneBatchRemaining = 0;
+    finishCloneBatch(s);
+  } else {
+    s.phase = 'playing';
+  }
+  return s;
+}
+
+function finishCloneBatch(state: GameState) {
+  drawCards(state, state.currentPlayer, 1);
+  addLog(state, `Clone Batch: Drew 1 card.`);
+  const player = currentPlayer(state);
+  if (state.pendingSchemeCard) {
+    player.discard.push(state.pendingSchemeCard);
+  }
+  state.pendingSchemeCard = null;
+  if (state.phase !== 'gameOver') {
+    useAction(state);
+  }
+}
+
+// ---- Teleport (move through fighters) ----
+
+export function getTeleportSpaces(state: GameState): string[] {
+  const hero = getHero(state, state.currentPlayer);
+  if (!hero) return [];
+  // Mewtwo can move through other fighters — use BFS ignoring occupied
+  const visited = new Set<string>([hero.spaceId]);
+  let frontier = [hero.spaceId];
+  for (let i = 0; i < 5; i++) {
+    const next: string[] = [];
+    for (const sid of frontier) {
+      const space = getSpace(state.board, sid);
+      if (!space) continue;
+      for (const adjId of space.adjacentIds) {
+        if (!visited.has(adjId)) {
+          visited.add(adjId);
+          next.push(adjId);
+        }
+      }
+    }
+    frontier = next;
+  }
+  visited.delete(hero.spaceId);
+  // Can only land on unoccupied spaces
+  return Array.from(visited).filter(sid => !isSpaceOccupied(state, sid, hero.id));
+}
+
+export function resolveTeleport(state: GameState, spaceId: string): GameState {
+  const s = clone(state);
+  const hero = getHero(s, s.currentPlayer);
+  if (!hero) return s;
+
+  const validSpaces = getTeleportSpaces(s);
+  if (validSpaces.includes(spaceId)) {
+    hero.spaceId = spaceId;
+    addLog(s, `Teleport: Mewtwo moves to ${spaceId}!`);
+  }
+
+  drawCards(s, s.currentPlayer, 1);
+  addLog(s, `Teleport: Drew 1 card.`);
+  s.players[s.currentPlayer].actionsRemaining++;
+  addLog(s, `Teleport: Gained 1 action.`);
+
+  const player = currentPlayer(s);
+  if (s.pendingSchemeCard) {
+    player.discard.push(s.pendingSchemeCard);
+  }
+  s.pendingSchemeCard = null;
+
+  if (s.phase !== 'gameOver') {
+    useAction(s);
+  }
+  return s;
+}
+
+export function skipTeleport(state: GameState): GameState {
+  const s = clone(state);
+  addLog(s, `Teleport: Mewtwo stays in place.`);
+
+  drawCards(s, s.currentPlayer, 1);
+  addLog(s, `Teleport: Drew 1 card.`);
+  s.players[s.currentPlayer].actionsRemaining++;
+  addLog(s, `Teleport: Gained 1 action.`);
+
+  const player = currentPlayer(s);
+  if (s.pendingSchemeCard) {
+    player.discard.push(s.pendingSchemeCard);
+  }
+  s.pendingSchemeCard = null;
+
+  if (s.phase !== 'gameOver') {
+    useAction(s);
+  }
+  return s;
+}
+
+// ---- Clone Rush (opponent hand discard choice) ----
+
+export function resolveCloneRushDiscard(state: GameState, cardId: string): GameState {
+  const s = clone(state);
+  if (s.mewtwoCloneRushPlayerIndex === null) return continueEffectQueue(s);
+  const opPlayer = s.players[s.mewtwoCloneRushPlayerIndex];
+  const cardIdx = opPlayer.hand.findIndex(c => c.id === cardId);
+  if (cardIdx < 0) return s;
+
+  const card = opPlayer.hand.splice(cardIdx, 1)[0];
+  opPlayer.discard.push(card);
+  const charDef = getCharDef(opPlayer.characterId);
+  const def = getCardDef(card, charDef);
+  addLog(s, `Clone Rush: ${opPlayer.name} discards ${def?.name || 'a card'}.`);
+
+  s.mewtwoCloneRushCards = [];
+  s.mewtwoCloneRushPlayerIndex = null;
+
+  return continueEffectQueue(s);
+}
+
+// ---- Get adjacent spaces to a specific fighter (for Psychic Storm clone placement) ----
+
+export function getAdjacentSpacesOf(state: GameState, fighterId: string): string[] {
+  const fighter = getFighter(state, fighterId);
+  if (!fighter) return [];
+  const space = getSpace(state.board, fighter.spaceId);
+  if (!space) return [];
+  return space.adjacentIds.filter(adjId => !isSpaceOccupied(state, adjId));
 }

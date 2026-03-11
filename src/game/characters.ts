@@ -634,4 +634,211 @@ export const AANG: CharacterDef = {
   },
 };
 
-export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA, AANG];
+// =============================================
+// MEWTWO (with Clones) — 30 cards
+// =============================================
+
+const mewtwoCards: CardDef[] = [
+  // ---- Hero (Mewtwo only) ----
+  {
+    id: 'mewtwo_psystrike',
+    name: 'Psystrike',
+    type: 'attack',
+    value: 4,
+    boost: 3,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'plusPerClone', timing: 'duringCombat', amount: 1 },
+    ],
+    effectText: 'DURING COMBAT: This card gets +1 for each Clone you control.',
+  },
+  {
+    id: 'mewtwo_mind_crush',
+    name: 'Mind Crush',
+    type: 'attack',
+    value: 4,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'opponentDiscardsRandomIfWon', timing: 'afterCombat', amount: 1 },
+    ],
+    effectText: 'AFTER COMBAT: If you won the combat, your opponent discards 1 card at random.',
+  },
+  {
+    id: 'mewtwo_psychic_storm',
+    name: 'Psychic Storm',
+    type: 'versatile',
+    value: 4,
+    boost: 3,
+    restriction: 'hero',
+    quantity: 1,
+    effects: [
+      { type: 'placeCloneAdjacentOpponent', timing: 'immediately' },
+    ],
+    effectText: 'IMMEDIATELY: Place 1 Clone in a space adjacent to the opposing fighter.',
+  },
+  {
+    id: 'mewtwo_psychic_barrier',
+    name: 'Psychic Barrier',
+    type: 'defense',
+    value: 4,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'preventEffectDamage', timing: 'immediately' },
+    ],
+    effectText: 'IMMEDIATELY: Prevent all damage you would take from card effects this combat.',
+  },
+  {
+    id: 'mewtwo_reflect',
+    name: 'Reflect',
+    type: 'scheme',
+    value: 0,
+    boost: 1,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [],
+    effectText: 'Put this card in your play area. During combat: Mewtwo takes 1 less damage from attacks. At the start of your turn, if Mewtwo controls no Clones, discard this card.',
+  },
+  {
+    id: 'mewtwo_calm_focus',
+    name: 'Calm Focus',
+    type: 'defense',
+    value: 1,
+    boost: 1,
+    restriction: 'hero',
+    quantity: 3,
+    effects: [
+      { type: 'recycleDiscard', timing: 'immediately', amount: 3 },
+    ],
+    effectText: 'IMMEDIATELY: Return the top 3 cards of your discard pile to your deck and shuffle.',
+  },
+  {
+    id: 'mewtwo_teleport',
+    name: 'Teleport',
+    type: 'scheme',
+    value: 0,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [],
+    effectText: 'IMMEDIATELY: Move Mewtwo up to 5 spaces (may move through other fighters). Draw 1 card. Gain 1 action.',
+  },
+  {
+    id: 'mewtwo_clone_batch',
+    name: 'Clone Batch',
+    type: 'scheme',
+    value: 0,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 1,
+    effects: [],
+    effectText: 'IMMEDIATELY: Mewtwo loses 1 health. Place up to 2 Clones in spaces adjacent to Mewtwo. Draw 1 card.',
+  },
+  {
+    id: 'mewtwo_recover',
+    name: 'Recover',
+    type: 'scheme',
+    value: 0,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [],
+    effectText: 'IMMEDIATELY: Recover 2 health. If Mewtwo has 6 or less health, recover 3 instead.',
+  },
+
+  // ---- Any fighter ----
+  {
+    id: 'mewtwo_sever_the_link',
+    name: 'Sever the Link',
+    type: 'attack',
+    value: 3,
+    boost: 1,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'moveAllClones', timing: 'afterCombat', amount: 2 },
+    ],
+    effectText: 'AFTER COMBAT: Move each Clone up to 2 spaces.',
+  },
+  {
+    id: 'mewtwo_cloned_instincts',
+    name: 'Cloned Instincts',
+    type: 'versatile',
+    value: 4,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'cancelIfFlanked', timing: 'immediately' },
+    ],
+    effectText: 'IMMEDIATELY: If the opposing fighter is flanked by Clones, ignore all effects on the opposing player\'s card this combat.',
+  },
+  {
+    id: 'mewtwo_swarm_tactics',
+    name: 'Swarm Tactics',
+    type: 'versatile',
+    value: 3,
+    boost: 2,
+    restriction: 'any',
+    quantity: 4,
+    effects: [
+      { type: 'plusIfCloneAdjacent', timing: 'duringCombat', amount: 2 },
+    ],
+    effectText: 'DURING COMBAT: If a Clone is adjacent to the opposing fighter, this card gets +2.',
+  },
+
+  // ---- Sidekick (Clone only) ----
+  {
+    id: 'mewtwo_clone_rush',
+    name: 'Clone Rush',
+    type: 'versatile',
+    value: 2,
+    boost: 3,
+    restriction: 'sidekick',
+    quantity: 2,
+    effects: [
+      { type: 'cloneRushDiscard', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: If the opposing fighter is flanked by Clones, look at that player\'s hand and choose 1 card. They discard it. Otherwise, that player discards 1 card at random.',
+  },
+  {
+    id: 'mewtwo_sacrificial_block',
+    name: 'Sacrificial Block',
+    type: 'defense',
+    value: 0,
+    boost: 2,
+    restriction: 'sidekick',
+    quantity: 2,
+    effects: [
+      { type: 'sacrificialBlock', timing: 'immediately' },
+    ],
+    effectText: 'IMMEDIATELY: Defeat this Clone. Draw 1 card. Deal 1 damage to the attacking fighter. Cancel all effects on the opposing fighter\'s card.',
+  },
+];
+
+export const MEWTWO: CharacterDef = {
+  id: 'mewtwo',
+  name: 'Mewtwo',
+  hp: 15,
+  isRanged: true,
+  moveValue: 2,
+  sidekick: {
+    name: 'Clone',
+    hp: 1,
+    isRanged: false,
+    moveValue: 2,
+    quantity: 3,
+  },
+  deckCards: mewtwoCards,
+  ability: {
+    name: 'Clone Vats',
+    description: 'Once per turn, at the start of your turn, you may discard 1 card to place 1 Clone in a space adjacent to Mewtwo. After combat: If your attacker was a Clone and you won the combat, draw 1 card.',
+    timing: 'startOfTurn',
+  },
+};
+
+export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA, AANG, MEWTWO];

@@ -119,6 +119,11 @@ export type Phase =
   | 'aang_air_scooter_choice' // Air Scooter: choose which space to move into
   | 'aang_charge_choice'      // Sky Bison Charge: choose move or damage
   | 'aang_flying_bison_zone'  // Flying Bison: pick space in different zone
+  | 'mewtwo_cloneVats'        // Clone Vats: discard a card to place a clone
+  | 'mewtwo_placeClone'       // Place a clone on an adjacent space
+  | 'mewtwo_cloneBatch_place' // Clone Batch: place up to 2 clones
+  | 'mewtwo_teleport_move'    // Teleport: move Mewtwo up to 5 spaces (through fighters)
+  | 'mewtwo_cloneRush_discard' // Clone Rush: choose a card from opponent's hand to discard
   | 'discard_excess'
   | 'gameOver';
 
@@ -187,4 +192,11 @@ export interface GameState {
 
   // Aang-specific: deck search choices (Meditate)
   searchCards: Card[];
+
+  // Mewtwo-specific
+  mewtwoReflectActive: [boolean, boolean]; // per player: is Reflect in play area?
+  mewtwoCloneBatchRemaining: number;       // how many clones still to place in Clone Batch
+  mewtwoCloneVatsUsed: boolean;            // has Clone Vats been used this turn?
+  mewtwoCloneRushCards: Card[];            // opponent's hand for Clone Rush choice
+  mewtwoCloneRushPlayerIndex: number | null; // which player's hand is being viewed
 }

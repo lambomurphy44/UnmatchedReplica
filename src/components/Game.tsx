@@ -9,6 +9,8 @@ import {
   getSchemeTargets,
   getReviveHarpySpaces,
   getValidPlacementSpaces,
+  getMewtwoAdjacentSpaces,
+  getTeleportSpaces,
 } from '../game/engine';
 import { dispatchAction } from '../game/dispatch';
 import { Board } from './Board';
@@ -247,6 +249,15 @@ export const Game: React.FC = () => {
       act('resolveEffectPush', { spaceId });
       return;
     }
+    // Mewtwo phases
+    if (gs.phase === 'mewtwo_placeClone' || gs.phase === 'mewtwo_cloneBatch_place') {
+      act('placeClone', { spaceId });
+      return;
+    }
+    if (gs.phase === 'mewtwo_teleport_move') {
+      act('resolveTeleport', { spaceId });
+      return;
+    }
   }, [gs, canInteract, act]);
 
   const handleCardClick = useCallback((cardId: string) => {
@@ -286,6 +297,16 @@ export const Game: React.FC = () => {
     }
     if (gs.phase === 'effect_chooseSearch') {
       act('resolveSearchChoice', { cardId });
+      return;
+    }
+    // Mewtwo: Clone Vats discard
+    if (gs.phase === 'mewtwo_cloneVats') {
+      act('useCloneVats', { cardId });
+      return;
+    }
+    // Mewtwo: Clone Rush — choose card from opponent's hand
+    if (gs.phase === 'mewtwo_cloneRush_discard') {
+      act('resolveCloneRushDiscard', { cardId });
       return;
     }
   }, [gs, canInteract, act]);
@@ -341,6 +362,13 @@ export const Game: React.FC = () => {
     }
     if (gs.phase === 'effect_pushFighter' && gs.pushTargetId) {
       return getPushSpaces(gs, gs.pushTargetId, gs.pushRange);
+    }
+    // Mewtwo phases
+    if (gs.phase === 'mewtwo_placeClone' || gs.phase === 'mewtwo_cloneBatch_place') {
+      return getMewtwoAdjacentSpaces(gs, gs.currentPlayer);
+    }
+    if (gs.phase === 'mewtwo_teleport_move') {
+      return getTeleportSpaces(gs);
     }
     return [];
   })();
@@ -445,6 +473,17 @@ export const Game: React.FC = () => {
           charDef={opponentCharDef}
           onCardClick={handleCardClick}
           label={`${opponentPlayer.name}'s Hand (Choose to discard)`}
+        />
+      );
+    }
+    // Mewtwo: Clone Rush — show opponent's hand to current player for choosing
+    if (gs.phase === 'mewtwo_cloneRush_discard') {
+      return (
+        <CardHand
+          hand={opponentPlayer.hand}
+          charDef={opponentCharDef}
+          onCardClick={handleCardClick}
+          label={`${opponentPlayer.name}'s Hand (Choose a card to discard)`}
         />
       );
     }
@@ -942,6 +981,49 @@ export const Game: React.FC = () => {
         <div className="phase-prompt">
           <div className="phase-text">
             Meditate: Choose a card from your deck to add to your hand.
+          </div>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'mewtwo_cloneVats' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Clone Vats: Discard a card to place a Clone adjacent to Mewtwo. Click a card, or skip.
+          </div>
+          <button className="skip-btn" onClick={() => act('skipCloneVats')}>
+            Skip Clone Vats
+          </button>
+        </div>
+      )}
+
+      {canInteract && (gs.phase === 'mewtwo_placeClone' || gs.phase === 'mewtwo_cloneBatch_place') && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Place a Clone on a highlighted space adjacent to Mewtwo.
+          </div>
+          {gs.phase === 'mewtwo_cloneBatch_place' && (
+            <button className="skip-btn" onClick={() => act('skipClonePlacement')}>
+              Skip Remaining Clones
+            </button>
+          )}
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'mewtwo_teleport_move' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Teleport: Click a highlighted space to move Mewtwo (may pass through fighters), or skip.
+          </div>
+          <button className="skip-btn" onClick={() => act('skipTeleport')}>
+            Skip Movement
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'mewtwo_cloneRush_discard' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Clone Rush: Choose a card from the opponent's hand to discard.
           </div>
         </div>
       )}

@@ -16,6 +16,10 @@ import {
   discardExcessCard,
   useMedusaGaze, skipMedusaGaze,
   placeSidekick,
+  useCloneVats, skipCloneVats,
+  placeClone, skipClonePlacement,
+  resolveTeleport, skipTeleport,
+  resolveCloneRushDiscard,
 } from './engine';
 
 /**
@@ -99,6 +103,21 @@ export function dispatchAction(state: GameState, actionType: string, args: Recor
         return resolveSearchChoice(state, args.cardId as string);
       case 'discardExcessCard':
         return discardExcessCard(state, args.cardId as string);
+      // Mewtwo actions
+      case 'useCloneVats':
+        return useCloneVats(state, args.cardId as string);
+      case 'skipCloneVats':
+        return skipCloneVats(state);
+      case 'placeClone':
+        return placeClone(state, args.spaceId as string);
+      case 'skipClonePlacement':
+        return skipClonePlacement(state);
+      case 'resolveTeleport':
+        return resolveTeleport(state, args.spaceId as string);
+      case 'skipTeleport':
+        return skipTeleport(state);
+      case 'resolveCloneRushDiscard':
+        return resolveCloneRushDiscard(state, args.cardId as string);
       default:
         return null;
     }
