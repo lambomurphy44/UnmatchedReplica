@@ -124,6 +124,8 @@ export type Phase =
   | 'mewtwo_cloneBatch_place' // Clone Batch: place up to 2 clones
   | 'mewtwo_teleport_move'    // Teleport: move Mewtwo up to 5 spaces (through fighters)
   | 'mewtwo_cloneRush_discard' // Clone Rush: choose a card from opponent's hand to discard
+  | 'sokka_boomerang'          // Sokka: choose to use boomerang (READY → OUT, deal 1 damage)
+  | 'sokka_boomerang_target'   // Sokka: choose target for boomerang damage
   | 'discard_excess'
   | 'gameOver';
 
@@ -199,4 +201,7 @@ export interface GameState {
   mewtwoCloneVatsUsed: boolean;            // has Clone Vats been used this turn?
   mewtwoCloneRushCards: Card[];            // opponent's hand for Clone Rush choice
   mewtwoCloneRushPlayerIndex: number | null; // which player's hand is being viewed
+
+  // Sokka-specific
+  sokkaBoomerangReady: [boolean, boolean]; // per player: is Boomerang READY? (true=READY, false=OUT)
 }

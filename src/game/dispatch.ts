@@ -20,6 +20,7 @@ import {
   placeClone, skipClonePlacement,
   resolveTeleport, skipTeleport,
   resolveCloneRushDiscard,
+  useSokkaBoomerang, skipSokkaBoomerang,
 } from './engine';
 
 /**
@@ -118,6 +119,11 @@ export function dispatchAction(state: GameState, actionType: string, args: Recor
         return skipTeleport(state);
       case 'resolveCloneRushDiscard':
         return resolveCloneRushDiscard(state, args.cardId as string);
+      // Sokka actions
+      case 'useSokkaBoomerang':
+        return useSokkaBoomerang(state, args.targetFighterId as string);
+      case 'skipSokkaBoomerang':
+        return skipSokkaBoomerang(state);
       default:
         return null;
     }

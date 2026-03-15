@@ -143,6 +143,10 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
     mewtwoCloneVatsUsed: false,
     mewtwoCloneRushCards: [],
     mewtwoCloneRushPlayerIndex: null,
+    sokkaBoomerangReady: [
+      char0.id === 'sokka',
+      char1.id === 'sokka',
+    ],
   };
 
   if (needsPlacement) {
@@ -414,6 +418,16 @@ function checkStartOfTurnAbility(state: GameState) {
       }
     }
   }
+  if (charDef.id === 'sokka') {
+    const playerIdx = state.currentPlayer;
+    if (state.sokkaBoomerangReady[playerIdx]) {
+      const targets = getSokkaBoomerangTargets(state);
+      if (targets.length > 0) {
+        state.phase = 'sokka_boomerang';
+        addLog(state, `Sokka's Boomerang is READY. You may flip it to OUT to deal 1 damage to a fighter in Sokka's zone.`);
+      }
+    }
+  }
 }
 
 function endTurn(state: GameState) {
@@ -498,6 +512,41 @@ export function useMedusaGaze(state: GameState, targetFighterId: string): GameSt
 export function skipMedusaGaze(state: GameState): GameState {
   const s = clone(state);
   addLog(s, `Medusa does not use her gaze.`);
+  s.phase = 'playing';
+  return s;
+}
+
+// ---- Sokka Boomerang ----
+
+export function getSokkaBoomerangTargets(state: GameState): Fighter[] {
+  const hero = getHero(state, state.currentPlayer);
+  if (!hero) return [];
+  const opponentIndex = state.currentPlayer === 0 ? 1 : 0;
+  return getAliveFighters(state, opponentIndex).filter(f =>
+    sameZone(state.board, hero.spaceId, f.spaceId)
+  );
+}
+
+export function useSokkaBoomerang(state: GameState, targetFighterId: string): GameState {
+  const s = clone(state);
+  const playerIdx = s.currentPlayer;
+  const target = getFighter(s, targetFighterId);
+  if (target) {
+    s.sokkaBoomerangReady = [...s.sokkaBoomerangReady] as [boolean, boolean];
+    s.sokkaBoomerangReady[playerIdx] = false;
+    target.hp = Math.max(0, target.hp - 1);
+    addLog(s, `Sokka's Boomerang hits ${target.name} for 1 damage! (${target.hp} HP) Boomerang is now OUT.`);
+    checkHeroDeath(s);
+  }
+  if (s.phase !== 'gameOver') {
+    s.phase = 'playing';
+  }
+  return s;
+}
+
+export function skipSokkaBoomerang(state: GameState): GameState {
+  const s = clone(state);
+  addLog(s, `Sokka keeps the Boomerang READY.`);
   s.phase = 'playing';
   return s;
 }

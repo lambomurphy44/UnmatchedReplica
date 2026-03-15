@@ -68,6 +68,20 @@ export const PlayerHUD: React.FC<PlayerHUDProps> = ({ state, playerIndex, isActi
           {charDef.ability.description}
         </div>
       )}
+      {player.characterId === 'sokka' && (
+        <div className="hud-boomerang" style={{
+          padding: '4px 8px',
+          margin: '4px 0',
+          borderRadius: '4px',
+          background: state.sokkaBoomerangReady[playerIndex] ? '#2e7d32' : '#b71c1c',
+          color: '#fff',
+          fontWeight: 'bold',
+          fontSize: '0.85em',
+          textAlign: 'center',
+        }}>
+          Boomerang: {state.sokkaBoomerangReady[playerIndex] ? 'READY' : 'OUT'}
+        </div>
+      )}
       <div className="hud-stats">
         <span>Hand: {player.hand.length}</span>
         <span>Deck: {player.deck.length}</span>

@@ -1020,4 +1020,222 @@ export const YENNENGA: CharacterDef = {
   },
 };
 
-export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA, AANG, MEWTWO, YENNENGA];
+// =============================================
+// SOKKA (with Suki) — 30 cards
+// =============================================
+
+const sokkaCards: CardDef[] = [
+  // ---- Hero (Sokka only) ----
+  {
+    id: 'sokka_space_sword_sweep',
+    name: 'Space Sword Sweep',
+    type: 'attack',
+    value: 4,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'discardToBoost', timing: 'duringCombat', amount: 2 },
+    ],
+    effectText: 'DURING COMBAT: You may discard 1 card. If you do, this card\'s value is +2.',
+  },
+  {
+    id: 'sokka_precision_throw',
+    name: 'Precision Throw',
+    type: 'attack',
+    value: 3,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'boomerangFlipForValue', timing: 'duringCombat', amount: 6 },
+    ],
+    effectText: 'DURING COMBAT: If the Boomerang is READY, you may flip it to OUT. If you do, this card\'s value is 6.',
+  },
+  {
+    id: 'sokka_trick_shot',
+    name: 'Trick Shot',
+    type: 'attack',
+    value: 3,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 3,
+    effects: [
+      { type: 'boomerangReadyIfLost', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: If you lost the combat, you may flip the Boomerang to READY.',
+  },
+  {
+    id: 'sokka_boomerang_bounce',
+    name: 'Boomerang Bounce',
+    type: 'attack',
+    value: 3,
+    boost: 3,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'boomerangBounceDamage', timing: 'afterCombat', amount: 1 },
+    ],
+    effectText: 'AFTER COMBAT: If the Boomerang is OUT and the opposing fighter was not defeated, deal 1 damage to a fighter in the opposing fighter\'s zone.',
+  },
+  {
+    id: 'sokka_improvised_shield',
+    name: 'Improvised Shield',
+    type: 'defense',
+    value: 2,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'boomerangFlipForValueAndCancel', timing: 'duringCombat', amount: 4 },
+    ],
+    effectText: 'DURING COMBAT: You may flip the Boomerang to OUT. If you do, this card\'s value is 4 and cancel all effects on your opponent\'s card.',
+  },
+  {
+    id: 'sokka_boomerang_setup',
+    name: 'Boomerang Set-Up',
+    type: 'versatile',
+    value: 2,
+    boost: 3,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'boomerangSetup', timing: 'immediately' },
+    ],
+    effectText: 'IMMEDIATELY: If the Boomerang is OUT, this card\'s value is 4 instead. AFTER COMBAT: If the Boomerang is OUT, you may flip it to READY.',
+  },
+  {
+    id: 'sokka_reel_it_back',
+    name: 'Reel It Back',
+    type: 'scheme',
+    value: 0,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 3,
+    effects: [
+      { type: 'boomerangReelBack', timing: 'immediately' },
+    ],
+    effectText: 'If the Boomerang is OUT, flip it to READY. Then move Sokka up to 2 spaces. Gain 1 action.',
+  },
+  {
+    id: 'sokka_cactus_juice',
+    name: 'Cactus Juice',
+    type: 'scheme',
+    value: 0,
+    boost: 4,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'healSelf', timing: 'immediately', amount: 3 },
+      { type: 'discardRandom', timing: 'immediately', amount: 1 },
+    ],
+    effectText: 'Sokka recovers 3 health. Then discard 1 random card.',
+  },
+
+  // ---- Sidekick (Suki only) ----
+  {
+    id: 'sokka_kyoshi_warrior_training',
+    name: 'Kyoshi Warrior Training',
+    type: 'scheme',
+    value: 0,
+    boost: 2,
+    restriction: 'sidekick',
+    quantity: 2,
+    effects: [
+      { type: 'moveSelf', timing: 'immediately', amount: 3 },
+      { type: 'opponentDiscards', timing: 'immediately', amount: 1 },
+    ],
+    effectText: 'Move Suki up to 3 spaces. She may move through opposing fighters. Choose an opposing fighter adjacent to Suki. That fighter discards 1 random card.',
+  },
+  {
+    id: 'sokka_fan_sweep',
+    name: 'Fan Sweep',
+    type: 'versatile',
+    value: 3,
+    boost: 3,
+    restriction: 'sidekick',
+    quantity: 2,
+    effects: [
+      { type: 'pushFighter', timing: 'immediately', amount: 2 },
+    ],
+    effectText: 'IMMEDIATELY: Move the defending fighter up to 2 spaces.',
+  },
+  {
+    id: 'sokka_turn_their_energy',
+    name: 'Turn Their Energy',
+    type: 'versatile',
+    value: 3,
+    boost: 2,
+    restriction: 'sidekick',
+    quantity: 2,
+    effects: [
+      { type: 'valueIfMoved', timing: 'duringCombat', amount: 5 },
+    ],
+    effectText: 'DURING COMBAT: If the opposing fighter is in a different space than they started the turn in, this card\'s value is 5 instead.',
+  },
+  {
+    id: 'sokka_kyoshi_counter',
+    name: 'Kyoshi Counter',
+    type: 'versatile',
+    value: 3,
+    boost: 2,
+    restriction: 'sidekick',
+    quantity: 2,
+    effects: [
+      { type: 'dealDamageIfLost', timing: 'afterCombat', amount: 1 },
+    ],
+    effectText: 'AFTER COMBAT: If Suki lost the combat, deal 1 damage to the opposing fighter.',
+  },
+
+  // ---- Any fighter ----
+  {
+    id: 'sokka_skirmish',
+    name: 'Skirmish',
+    type: 'versatile',
+    value: 4,
+    boost: 1,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'moveFighterIfWon', timing: 'afterCombat', amount: 2 },
+    ],
+    effectText: 'AFTER COMBAT: If you won the combat, choose one of the fighters in the combat and move them up to 2 spaces.',
+  },
+  {
+    id: 'sokka_regroup',
+    name: 'Regroup',
+    type: 'versatile',
+    value: 1,
+    boost: 2,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'drawIfWon', timing: 'afterCombat', amount: 2 },
+      { type: 'drawCards', timing: 'afterCombat', amount: 1 },
+    ],
+    effectText: 'AFTER COMBAT: Draw 1 card. If you won this combat, draw 2 cards instead.',
+  },
+];
+
+export const SOKKA: CharacterDef = {
+  id: 'sokka',
+  name: 'Sokka',
+  hp: 15,
+  isRanged: false,
+  moveValue: 2,
+  sidekick: {
+    name: 'Suki',
+    hp: 6,
+    isRanged: false,
+    moveValue: 2,
+    quantity: 1,
+  },
+  deckCards: sokkaCards,
+  ability: {
+    name: 'Boomerang!',
+    description: 'Start with the Boomerang READY. During your turn, you may flip it from READY to OUT to deal 1 damage to a fighter in Sokka\'s zone. Card effects can flip it back to READY.',
+    timing: 'startOfTurn',
+  },
+};
+
+export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA, AANG, MEWTWO, YENNENGA, SOKKA];

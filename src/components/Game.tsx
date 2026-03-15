@@ -6,6 +6,7 @@ import {
   getEffectMoveSpaces, getPlaceFighterSpaces,
   getPushSpaces,
   getMedusaGazeTargets,
+  getSokkaBoomerangTargets,
   getSchemeTargets,
   getReviveHarpySpaces,
   getValidPlacementSpaces,
@@ -229,6 +230,14 @@ export const Game: React.FC = () => {
       }
       return;
     }
+    if (gs.phase === 'sokka_boomerang') {
+      const targets = getSokkaBoomerangTargets(gs);
+      const targetOnSpace = targets.find(t => t.spaceId === spaceId);
+      if (targetOnSpace) {
+        act('useSokkaBoomerang', { targetFighterId: targetOnSpace.id });
+      }
+      return;
+    }
     if (gs.phase === 'aang_air_scooter_choice') {
       act('resolveAirScooterChoice', { spaceId });
       return;
@@ -350,6 +359,9 @@ export const Game: React.FC = () => {
     }
     if (gs.phase === 'medusa_startAbility') {
       return getMedusaGazeTargets(gs).map(t => t.spaceId);
+    }
+    if (gs.phase === 'sokka_boomerang') {
+      return getSokkaBoomerangTargets(gs).map(t => t.spaceId);
     }
     if (gs.phase === 'effect_moveFighter') {
       return getEffectMoveSpaces(gs);
@@ -764,6 +776,17 @@ export const Game: React.FC = () => {
           </div>
           <button className="skip-btn" onClick={() => act('skipMedusaGaze')}>
             Skip Gaze
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'sokka_boomerang' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Boomerang! Click an enemy fighter in Sokka's zone to deal 1 damage (flips to OUT), or skip.
+          </div>
+          <button className="skip-btn" onClick={() => act('skipSokkaBoomerang')}>
+            Keep Ready
           </button>
         </div>
       )}

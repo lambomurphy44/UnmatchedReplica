@@ -16,6 +16,8 @@ import clone3Portrait from '../assets/Mewtwo Clone 3.png';
 import yennengaPortrait from '../assets/Yennenga.png';
 import archer1Portrait from '../assets/Archer 1.png';
 import archer2Portrait from '../assets/Archer 2.png';
+import sokkaPortrait from '../assets/Sokka.png';
+import sukiPortrait from '../assets/Suki.png';
 
 
 interface BoardProps {
@@ -60,6 +62,9 @@ function getPortrait(f: Fighter): string {
     if (f.name.endsWith(' 1')) return archer1Portrait;
     if (f.name.endsWith(' 2')) return archer2Portrait;
     return archer1Portrait;
+  }
+  if (f.characterId === 'sokka') {
+    return f.isHero ? sokkaPortrait : sukiPortrait;
   }
 
   if (f.isHero) return medusaPortrait;
