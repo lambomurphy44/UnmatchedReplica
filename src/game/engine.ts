@@ -949,6 +949,18 @@ function resolveCombat(state: GameState): GameState {
       if (effect.type === 'preventEffectDamage') {
         addLog(s, `Psychic Barrier: Effect damage is prevented this combat.`);
       }
+      // Fan Sweep: move defending fighter up to N spaces (auto-resolve: pick closest unoccupied adjacent space)
+      if (effect.type === 'pushFighter' && effect.amount) {
+        const pushSpaces = getPushSpaces(s, defender.id, effect.amount);
+        if (pushSpaces.length > 0) {
+          // Auto-pick first valid push space
+          const target = pushSpaces[0];
+          defender.spaceId = target;
+          addLog(s, `${atkCardDef?.name}: ${defender.name} moved to ${target}!`);
+        } else {
+          addLog(s, `${atkCardDef?.name}: No valid spaces to move ${defender.name}.`);
+        }
+      }
     }
   }
 
@@ -1041,9 +1053,28 @@ function resolveCombat(state: GameState): GameState {
     if (effect.type === 'valueIfMoved') {
       const startSpace = s.turnStartSpaces[defender.id];
       if (startSpace && startSpace !== defender.spaceId) {
-        // This modifies the defense card value - but this card is versatile used as defense
-        // The card value is already set, we'll adjust in the value calculation
         addLog(s, `${defCardDef?.name}: Fighter moved this turn, value becomes ${effect.amount}!`);
+      }
+    }
+    if (effect.type === 'valueIfOpponentMoved') {
+      const startSpace = s.turnStartSpaces[attacker.id];
+      if (startSpace && startSpace !== attacker.spaceId) {
+        addLog(s, `${defCardDef?.name}: Opposing fighter moved this turn, value becomes ${effect.amount}!`);
+      }
+    }
+    // Boomerang Set-Up: if boomerang is OUT, value becomes 4
+    if (effect.type === 'boomerangSetupValue') {
+      if (!s.sokkaBoomerangReady[defender.owner]) {
+        addLog(s, `${defCardDef?.name}: Boomerang is OUT — value becomes ${effect.amount}!`);
+      }
+    }
+    // Improvised Shield: flip boomerang to OUT, value becomes 4, cancel opponent effects
+    if (effect.type === 'boomerangFlipForValueAndCancel') {
+      if (s.sokkaBoomerangReady[defender.owner]) {
+        s.sokkaBoomerangReady = [...s.sokkaBoomerangReady] as [boolean, boolean];
+        s.sokkaBoomerangReady[defender.owner] = false;
+        s.combat!.attackerEffectsCancelled = true;
+        addLog(s, `${defCardDef?.name}: Boomerang flipped to OUT! Value becomes ${effect.amount}, opponent's effects cancelled!`);
       }
     }
   }
@@ -1052,8 +1083,12 @@ function resolveCombat(state: GameState): GameState {
   let atkHasDuringBoost = false;
   for (const effect of atkDuring) {
     if (effect.type === 'boostAttack') {
-      // Noble Sacrifice / Second Shot: the attacker may play a boost card
-      // Check if player has cards in hand
+      if (atkPlayer.hand.length > 0) {
+        atkHasDuringBoost = true;
+      }
+    }
+    if (effect.type === 'discardToBoost') {
+      // Space Sword Sweep: discard 1 card for flat +2
       if (atkPlayer.hand.length > 0) {
         atkHasDuringBoost = true;
       }
@@ -1064,12 +1099,46 @@ function resolveCombat(state: GameState): GameState {
         addLog(s, `${atkCardDef?.name}: Fighter moved this turn, value becomes ${effect.amount}!`);
       }
     }
+    if (effect.type === 'valueIfOpponentMoved') {
+      const startSpace = s.turnStartSpaces[defender.id];
+      if (startSpace && startSpace !== defender.spaceId) {
+        addLog(s, `${atkCardDef?.name}: Opposing fighter moved this turn, value becomes ${effect.amount}!`);
+      }
+    }
+    // Precision Throw: if boomerang READY, flip to OUT, value becomes 6
+    if (effect.type === 'boomerangFlipForValue') {
+      if (s.sokkaBoomerangReady[attacker.owner]) {
+        s.sokkaBoomerangReady = [...s.sokkaBoomerangReady] as [boolean, boolean];
+        s.sokkaBoomerangReady[attacker.owner] = false;
+        addLog(s, `${atkCardDef?.name}: Boomerang flipped to OUT! Value becomes ${effect.amount}!`);
+      }
+    }
+    // Boomerang Set-Up: if boomerang is OUT, value becomes 4
+    if (effect.type === 'boomerangSetupValue') {
+      if (!s.sokkaBoomerangReady[attacker.owner]) {
+        addLog(s, `${atkCardDef?.name}: Boomerang is OUT — value becomes ${effect.amount}!`);
+      }
+    }
+    // Improvised Shield on attack side (versatile used as attack? unlikely but handle)
+    if (effect.type === 'boomerangFlipForValueAndCancel') {
+      if (s.sokkaBoomerangReady[attacker.owner]) {
+        s.sokkaBoomerangReady = [...s.sokkaBoomerangReady] as [boolean, boolean];
+        s.sokkaBoomerangReady[attacker.owner] = false;
+        s.combat!.defenderEffectsCancelled = true;
+        addLog(s, `${atkCardDef?.name}: Boomerang flipped to OUT! Value becomes ${effect.amount}, opponent's effects cancelled!`);
+      }
+    }
   }
 
   // If there's a during-combat boost to play, pause and let player choose
   if (atkHasDuringBoost) {
     s.phase = 'combat_duringBoost';
-    addLog(s, `${atkCardDef?.name}: You may play a card as a boost. Select a card or skip.`);
+    const hasDiscardToBoost = atkDuring.some(e => e.type === 'discardToBoost');
+    if (hasDiscardToBoost) {
+      addLog(s, `${atkCardDef?.name}: You may discard a card for +2 value. Select a card or skip.`);
+    } else {
+      addLog(s, `${atkCardDef?.name}: You may play a card as a boost. Select a card or skip.`);
+    }
     return s;
   }
 
@@ -1108,20 +1177,54 @@ function resolveCombatDamage(state: GameState): GameState {
     atkValue += boostDef?.boost || 0;
   }
 
-  // During-combat card boost (Noble Sacrifice / Second Shot)
+  // During-combat card boost (Noble Sacrifice / Second Shot — but NOT discardToBoost)
   if (s.combat.duringCombatBoost) {
-    const boostCharDef = getCharDef(atkPlayer.characterId);
-    const boostDef = getCardDef(s.combat.duringCombatBoost, boostCharDef);
-    atkValue += boostDef?.boost || 0;
+    const isDiscardToBoost = atkCardDef?.effects.some(e => e.type === 'discardToBoost') || false;
+    if (!isDiscardToBoost) {
+      const boostCharDef = getCharDef(atkPlayer.characterId);
+      const boostDef = getCardDef(s.combat.duringCombatBoost, boostCharDef);
+      atkValue += boostDef?.boost || 0;
+    }
   }
 
-  // Momentous Shift: if fighter moved, value becomes 5
+  // Momentous Shift: if fighter moved, value becomes X
   if (!s.combat.attackerEffectsCancelled && atkCardDef) {
     for (const effect of atkCardDef.effects) {
       if (effect.timing === 'duringCombat' && effect.type === 'valueIfMoved') {
         const startSpace = s.turnStartSpaces[attacker.id];
         if (startSpace && startSpace !== attacker.spaceId) {
           atkValue = (atkValue - (atkCardDef.value || 0)) + (effect.amount || 0);
+        }
+      }
+      // Turn Their Energy: if OPPONENT moved, value becomes X
+      if (effect.timing === 'duringCombat' && effect.type === 'valueIfOpponentMoved') {
+        const startSpace = s.turnStartSpaces[defender.id];
+        if (startSpace && startSpace !== defender.spaceId) {
+          atkValue = (atkValue - (atkCardDef.value || 0)) + (effect.amount || 0);
+        }
+      }
+      // Precision Throw: if boomerang was flipped, value becomes 6
+      if (effect.timing === 'duringCombat' && effect.type === 'boomerangFlipForValue') {
+        if (!s.sokkaBoomerangReady[attacker.owner]) {
+          atkValue = (atkValue - (atkCardDef.value || 0)) + (effect.amount || 0);
+        }
+      }
+      // Boomerang Set-Up: if boomerang OUT, value becomes 4
+      if (effect.timing === 'duringCombat' && effect.type === 'boomerangSetupValue') {
+        if (!s.sokkaBoomerangReady[attacker.owner]) {
+          atkValue = (atkValue - (atkCardDef.value || 0)) + (effect.amount || 0);
+        }
+      }
+      // Improvised Shield used as attack: if boomerang was flipped, value becomes 4
+      if (effect.timing === 'duringCombat' && effect.type === 'boomerangFlipForValueAndCancel') {
+        if (!s.sokkaBoomerangReady[attacker.owner]) {
+          atkValue = (atkValue - (atkCardDef.value || 0)) + (effect.amount || 0);
+        }
+      }
+      // Space Sword Sweep: flat +2 if discard was made (tracked via duringCombatBoost)
+      if (effect.timing === 'duringCombat' && effect.type === 'discardToBoost') {
+        if (s.combat.duringCombatBoost) {
+          atkValue += effect.amount || 0;
         }
       }
     }
@@ -1131,6 +1234,22 @@ function resolveCombatDamage(state: GameState): GameState {
       if (effect.timing === 'duringCombat' && effect.type === 'valueIfMoved') {
         const startSpace = s.turnStartSpaces[defender.id];
         if (startSpace && startSpace !== defender.spaceId) {
+          defValue = (defValue - (defCardDef.value || 0)) + (effect.amount || 0);
+        }
+      }
+      if (effect.timing === 'duringCombat' && effect.type === 'valueIfOpponentMoved') {
+        const startSpace = s.turnStartSpaces[attacker.id];
+        if (startSpace && startSpace !== attacker.spaceId) {
+          defValue = (defValue - (defCardDef.value || 0)) + (effect.amount || 0);
+        }
+      }
+      if (effect.timing === 'duringCombat' && effect.type === 'boomerangSetupValue') {
+        if (!s.sokkaBoomerangReady[defender.owner]) {
+          defValue = (defValue - (defCardDef.value || 0)) + (effect.amount || 0);
+        }
+      }
+      if (effect.timing === 'duringCombat' && effect.type === 'boomerangFlipForValueAndCancel') {
+        if (!s.sokkaBoomerangReady[defender.owner]) {
           defValue = (defValue - (defCardDef.value || 0)) + (effect.amount || 0);
         }
       }
@@ -1561,6 +1680,49 @@ function processAfterCombatEffect(
       }
       break;
     }
+
+    // ---- Sokka / Suki after-combat effects ----
+
+    case 'boomerangReadyIfLost': {
+      // Trick Shot: if lost, flip boomerang to READY
+      if (!selfWon && !state.sokkaBoomerangReady[selfPlayer.index]) {
+        state.sokkaBoomerangReady = [...state.sokkaBoomerangReady] as [boolean, boolean];
+        state.sokkaBoomerangReady[selfPlayer.index] = true;
+        addLog(state, `Trick Shot: Boomerang flipped back to READY!`);
+      }
+      break;
+    }
+
+    case 'boomerangBounceDamage': {
+      // Boomerang Bounce: if boomerang OUT and opponent alive, deal 1 damage
+      if (!state.sokkaBoomerangReady[selfPlayer.index] && opponent.hp > 0) {
+        opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
+        addLog(state, `Boomerang Bounce: Boomerang is OUT — deals ${effect.amount || 1} damage to ${opponent.name}! (${opponent.hp} HP)`);
+        checkHeroDeath(state);
+      }
+      break;
+    }
+
+    case 'boomerangReadyAfterCombat': {
+      // Boomerang Set-Up: if boomerang OUT, flip to READY
+      if (!state.sokkaBoomerangReady[selfPlayer.index]) {
+        state.sokkaBoomerangReady = [...state.sokkaBoomerangReady] as [boolean, boolean];
+        state.sokkaBoomerangReady[selfPlayer.index] = true;
+        addLog(state, `Boomerang Set-Up: Boomerang flipped back to READY!`);
+      }
+      break;
+    }
+
+    case 'dealDamageIfLost': {
+      // Kyoshi Counter: if lost, deal 1 damage to opponent
+      if (!selfWon && opponent.hp > 0) {
+        opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
+        addLog(state, `Kyoshi Counter: Deals ${effect.amount || 1} damage to ${opponent.name}! (${opponent.hp} HP)`);
+        checkHeroDeath(state);
+      }
+      break;
+    }
+
   }
 }
 
@@ -1571,6 +1733,12 @@ export function selectDuringCombatBoost(state: GameState, cardId: string | null)
   if (!s.combat) return s;
   const player = s.players[s.currentPlayer];
 
+  // Check if this is a discardToBoost (Space Sword Sweep) vs normal boost (Noble Sacrifice)
+  const attacker = getFighter(s, s.combat.attackerId)!;
+  const atkCharDef = getCharDef(s.players[attacker.owner].characterId);
+  const atkCardDef = s.combat.attackCard ? getCardDef(s.combat.attackCard, atkCharDef) : null;
+  const isDiscardToBoost = atkCardDef?.effects.some(e => e.type === 'discardToBoost') || false;
+
   if (cardId) {
     const cardIdx = player.hand.findIndex(c => c.id === cardId);
     if (cardIdx >= 0) {
@@ -1578,7 +1746,11 @@ export function selectDuringCombatBoost(state: GameState, cardId: string | null)
       s.combat.duringCombatBoost = card;
       const charDef = getCharDef(player.characterId);
       const def = getCardDef(card, charDef);
-      addLog(s, `Plays ${def?.name} as combat boost (+${def?.boost || 0}).`);
+      if (isDiscardToBoost) {
+        addLog(s, `Discards ${def?.name} — Space Sword Sweep gains +2 value!`);
+      } else {
+        addLog(s, `Plays ${def?.name} as combat boost (+${def?.boost || 0}).`);
+      }
     }
   } else {
     addLog(s, `Skips combat boost.`);
@@ -2040,6 +2212,65 @@ export function playScheme(state: GameState, cardId: string): GameState {
       break;
     }
 
+    // ---- Sokka schemes ----
+    case 'sokka_reel_it_back': {
+      // If boomerang is OUT, flip to READY
+      if (!s.sokkaBoomerangReady[s.currentPlayer]) {
+        s.sokkaBoomerangReady = [...s.sokkaBoomerangReady] as [boolean, boolean];
+        s.sokkaBoomerangReady[s.currentPlayer] = true;
+        addLog(s, `Reel It Back: Boomerang flipped to READY!`);
+      } else {
+        addLog(s, `Reel It Back: Boomerang is already READY.`);
+      }
+      // Move Sokka up to 2 spaces + gain 1 action
+      const sokkaHero = getHero(s, s.currentPlayer);
+      if (sokkaHero && sokkaHero.hp > 0) {
+        s.pendingSchemeCard = card;
+        s.schemeMoveFighterId = sokkaHero.id;
+        s.schemeMoveRange = 2;
+        player.actionsRemaining += 1; // Gain 1 action (net 0 since playing scheme costs 1)
+        s.phase = 'scheme_moveSidekick'; // Reuse sidekick move phase for hero move
+        addLog(s, `Move Sokka up to 2 spaces. Gain 1 action.`);
+        return s;
+      }
+      player.actionsRemaining += 1; // Gain 1 action
+      break;
+    }
+
+    case 'sokka_cactus_juice': {
+      // Recover 3 health
+      const sokkaHero2 = getHero(s, s.currentPlayer);
+      if (sokkaHero2 && sokkaHero2.hp > 0) {
+        const healed = Math.min(3, sokkaHero2.maxHp - sokkaHero2.hp);
+        sokkaHero2.hp = Math.min(sokkaHero2.maxHp, sokkaHero2.hp + 3);
+        addLog(s, `Cactus Juice: Sokka recovers ${healed} health! (${sokkaHero2.hp}/${sokkaHero2.maxHp} HP)`);
+      }
+      // Discard 1 random card
+      if (player.hand.length > 0) {
+        const randIdx = Math.floor(Math.random() * player.hand.length);
+        const discarded = player.hand.splice(randIdx, 1)[0];
+        player.discard.push(discarded);
+        const charDef2 = getCharDef(player.characterId);
+        const discDef = getCardDef(discarded, charDef2);
+        addLog(s, `Cactus Juice: Discarded ${discDef?.name || 'a card'} at random.`);
+      }
+      break;
+    }
+
+    case 'sokka_kyoshi_warrior_training': {
+      // Move Suki up to 3 spaces, then adjacent opponent discards 1 random card
+      const suki = s.fighters.find(f => f.owner === s.currentPlayer && !f.isHero && f.hp > 0 && f.characterId === 'sokka');
+      if (suki) {
+        s.pendingSchemeCard = card;
+        s.schemeMoveFighterId = suki.id;
+        s.schemeMoveRange = 3;
+        s.phase = 'scheme_moveSidekick';
+        addLog(s, `Kyoshi Warrior Training: Move Suki up to 3 spaces.`);
+        return s;
+      }
+      break;
+    }
+
     default:
       addLog(s, `Scheme has no programmed effect.`);
       break;
@@ -2256,6 +2487,29 @@ export function skipSchemeSidekickMove(state: GameState): GameState {
 
 function cleanupSchemeMove(state: GameState): GameState {
   const player = currentPlayer(state);
+
+  // Kyoshi Warrior Training: after Suki moves, adjacent opponent discards 1 random card
+  if (state.pendingSchemeCard?.defId === 'sokka_kyoshi_warrior_training') {
+    const suki = state.schemeMoveFighterId ? getFighter(state, state.schemeMoveFighterId) : null;
+    if (suki && suki.hp > 0 && suki.spaceId) {
+      const opponentIndex = state.currentPlayer === 0 ? 1 : 0;
+      const opponentPlayer = state.players[opponentIndex];
+      const adjEnemies = getAliveFighters(state, opponentIndex).filter(f =>
+        areAdjacent(state.board, suki.spaceId, f.spaceId)
+      );
+      if (adjEnemies.length > 0 && opponentPlayer.hand.length > 0) {
+        // Pick first adjacent enemy and discard 1 random card from their controller
+        const target = adjEnemies[0];
+        const randIdx = Math.floor(Math.random() * opponentPlayer.hand.length);
+        const discarded = opponentPlayer.hand.splice(randIdx, 1)[0];
+        opponentPlayer.discard.push(discarded);
+        const charDef = getCharDef(opponentPlayer.characterId);
+        const def = getCardDef(discarded, charDef);
+        addLog(state, `Kyoshi Warrior Training: ${target.name} — ${opponentPlayer.name} discards ${def?.name || 'a card'} at random!`);
+      }
+    }
+  }
+
   if (state.pendingSchemeCard) {
     player.discard.push(state.pendingSchemeCard);
   }

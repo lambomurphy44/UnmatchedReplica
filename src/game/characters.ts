@@ -1029,7 +1029,7 @@ const sokkaCards: CardDef[] = [
   {
     id: 'sokka_space_sword_sweep',
     name: 'Space Sword Sweep',
-    type: 'attack',
+    type: 'versatile',
     value: 4,
     boost: 2,
     restriction: 'hero',
@@ -1068,7 +1068,7 @@ const sokkaCards: CardDef[] = [
   {
     id: 'sokka_boomerang_bounce',
     name: 'Boomerang Bounce',
-    type: 'attack',
+    type: 'versatile',
     value: 3,
     boost: 3,
     restriction: 'hero',
@@ -1100,7 +1100,8 @@ const sokkaCards: CardDef[] = [
     restriction: 'hero',
     quantity: 2,
     effects: [
-      { type: 'boomerangSetup', timing: 'immediately' },
+      { type: 'boomerangSetupValue', timing: 'duringCombat', amount: 4 },
+      { type: 'boomerangReadyAfterCombat', timing: 'afterCombat' },
     ],
     effectText: 'IMMEDIATELY: If the Boomerang is OUT, this card\'s value is 4 instead. AFTER COMBAT: If the Boomerang is OUT, you may flip it to READY.',
   },
@@ -1169,7 +1170,7 @@ const sokkaCards: CardDef[] = [
     restriction: 'sidekick',
     quantity: 2,
     effects: [
-      { type: 'valueIfMoved', timing: 'duringCombat', amount: 5 },
+      { type: 'valueIfOpponentMoved', timing: 'duringCombat', amount: 5 },
     ],
     effectText: 'DURING COMBAT: If the opposing fighter is in a different space than they started the turn in, this card\'s value is 5 instead.',
   },
@@ -1210,8 +1211,7 @@ const sokkaCards: CardDef[] = [
     restriction: 'any',
     quantity: 2,
     effects: [
-      { type: 'drawIfWon', timing: 'afterCombat', amount: 2 },
-      { type: 'drawCards', timing: 'afterCombat', amount: 1 },
+      { type: 'regroupDraw', timing: 'afterCombat' },
     ],
     effectText: 'AFTER COMBAT: Draw 1 card. If you won this combat, draw 2 cards instead.',
   },
