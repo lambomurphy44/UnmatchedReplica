@@ -117,6 +117,7 @@ export type Phase =
   | 'scheme_moveSidekick'
   | 'scheme_moveAll'          // Winged Frenzy / Command: move all your fighters
   | 'scheme_reviveHarpy'      // Winged Frenzy: place revived harpy
+  | 'combat_immediately_push' // Fan Sweep: push opposing fighter during immediately phase
   | 'aang_air_scooter_choice' // Air Scooter: choose which space to move into
   | 'aang_charge_choice'      // Sky Bison Charge: choose move or damage
   | 'aang_flying_bison_zone'  // Flying Bison: pick space in different zone
@@ -229,5 +230,6 @@ export interface GameState {
     totalDamage: number;
     assignments: Record<string, number>; // fighterId -> damage assigned
     eligibleFighterIds: string[];        // fighters that can receive damage
+    continuation: 'afterCombat' | 'rainFollowUp' | 'effectQueue' | 'playing'; // what to do after split
   } | null;
 }

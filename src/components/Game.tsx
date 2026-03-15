@@ -170,6 +170,14 @@ export const Game: React.FC = () => {
       return gs.currentPlayer !== myIndex; // defender = opponent of current player
     }
 
+    // Combat immediately push: the player who played the push card controls
+    if (gs.phase === 'combat_immediately_push' && gs.combat && gs.pushTargetId) {
+      // If the attacker is being pushed, the defender (opponent) controls
+      if (gs.pushTargetId === gs.combat.attackerId) return gs.currentPlayer !== myIndex;
+      // If the defender is being pushed, the attacker (current player) controls
+      return gs.currentPlayer === myIndex;
+    }
+
     // All other phases: the current player interacts
     return gs.currentPlayer === myIndex;
   })();
@@ -265,6 +273,10 @@ export const Game: React.FC = () => {
     }
     if (gs.phase === 'effect_pushFighter') {
       act('resolveEffectPush', { spaceId });
+      return;
+    }
+    if (gs.phase === 'combat_immediately_push') {
+      act('resolveCombatImmediatelyPush', { spaceId });
       return;
     }
     // Mewtwo phases
@@ -388,7 +400,7 @@ export const Game: React.FC = () => {
     if (gs.phase === 'scheme_reviveHarpy') {
       return getReviveHarpySpaces(gs);
     }
-    if (gs.phase === 'effect_pushFighter' && gs.pushTargetId) {
+    if ((gs.phase === 'effect_pushFighter' || gs.phase === 'combat_immediately_push') && gs.pushTargetId) {
       return getPushSpaces(gs, gs.pushTargetId, gs.pushRange);
     }
     // Mewtwo phases
@@ -1100,6 +1112,20 @@ export const Game: React.FC = () => {
             </div>
             <button className="skip-btn" onClick={() => act('skipEffectPush')}>
               Skip Push
+            </button>
+          </div>
+        );
+      })()}
+
+      {canInteract && gs.phase === 'combat_immediately_push' && (() => {
+        const f = gs.pushTargetId ? getFighter(gs, gs.pushTargetId) : null;
+        return (
+          <div className="phase-prompt">
+            <div className="phase-text">
+              Move {f?.name} up to {gs.pushRange} space(s) - click a highlighted space, or skip.
+            </div>
+            <button className="skip-btn" onClick={() => act('skipCombatImmediatelyPush')}>
+              Skip
             </button>
           </div>
         );

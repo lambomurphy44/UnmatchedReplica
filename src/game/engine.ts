@@ -566,8 +566,13 @@ export function useSokkaBoomerang(state: GameState, targetFighterId: string): Ga
   if (target) {
     s.sokkaBoomerangReady = [...s.sokkaBoomerangReady] as [boolean, boolean];
     s.sokkaBoomerangReady[playerIdx] = false;
+    addLog(s, `Sokka's Boomerang hits ${target.name}! Boomerang is now OUT.`);
+    // Check for Yennenga damage splitting
+    if (tryYennengaDamageSplit(s, target, 1, 'playing')) {
+      return s;
+    }
     target.hp = Math.max(0, target.hp - 1);
-    addLog(s, `Sokka's Boomerang hits ${target.name} for 1 damage! (${target.hp} HP) Boomerang is now OUT.`);
+    addLog(s, `${target.name} takes 1 damage! (${target.hp} HP)`);
     checkHeroDeath(s);
   }
   if (s.phase !== 'gameOver') {
@@ -603,6 +608,40 @@ export function skipImprovisedShield(state: GameState): GameState {
   if (!s.combat) return s;
   addLog(s, `Improvised Shield: Chose not to flip the Boomerang.`);
   return continueAttackerDuringCombat(s);
+}
+
+/** Combat Immediately Push: player moves the opposing fighter */
+export function resolveCombatImmediatelyPush(state: GameState, targetSpaceId: string): GameState {
+  const s = clone(state);
+  if (!s.combat) return s;
+  const fighterId = s.pushTargetId;
+  if (!fighterId) return continueCombatAfterImmediately(s);
+  const fighter = getFighter(s, fighterId);
+  if (!fighter) return continueCombatAfterImmediately(s);
+
+  const reachable = getPushSpaces(s, fighterId, s.pushRange);
+  if (reachable.includes(targetSpaceId)) {
+    fighter.spaceId = targetSpaceId;
+    addLog(s, `${fighter.name} moved to ${targetSpaceId}!`);
+  }
+
+  s.pushTargetId = null;
+  s.pushRange = 0;
+  return continueCombatAfterImmediately(s);
+}
+
+/** Combat Immediately Push: player skips moving the opposing fighter */
+export function skipCombatImmediatelyPush(state: GameState): GameState {
+  const s = clone(state);
+  if (!s.combat) return s;
+  const fighterId = s.pushTargetId;
+  if (fighterId) {
+    const f = getFighter(s, fighterId);
+    addLog(s, `${f?.name} is not moved.`);
+  }
+  s.pushTargetId = null;
+  s.pushRange = 0;
+  return continueCombatAfterImmediately(s);
 }
 
 /** Precision Throw: player chooses to flip boomerang for value 6 */
@@ -661,6 +700,34 @@ function continuePrecisionThrowResume(s: GameState): GameState {
 
 // ---- Yennenga Damage Split ----
 
+/** Check if damage to a Yennenga-owned fighter should trigger damage splitting.
+ *  Returns true if split was set up (caller should return s), false if damage should be applied normally. */
+function tryYennengaDamageSplit(
+  s: GameState, target: Fighter, damage: number, continuation: 'afterCombat' | 'rainFollowUp' | 'effectQueue' | 'playing'
+): boolean {
+  const ownerCharId = s.players[target.owner].characterId;
+  if (ownerCharId !== 'yennenga' || damage <= 0) return false;
+
+  const friendliesInZone = getAliveFighters(s, target.owner).filter(f =>
+    f.id !== target.id && sameZone(s.board, f.spaceId, target.spaceId)
+  );
+  if (friendliesInZone.length === 0) return false;
+
+  const eligible = [target, ...friendliesInZone];
+  s.yennengaDamageSplit = {
+    totalDamage: damage,
+    assignments: {},
+    eligibleFighterIds: eligible.map(f => f.id),
+    continuation,
+  };
+  for (const f of eligible) {
+    s.yennengaDamageSplit.assignments[f.id] = 0;
+  }
+  s.phase = 'yennenga_damage_split';
+  addLog(s, `Yennenga: Distribute ${damage} damage among your fighters in the zone.`);
+  return true;
+}
+
 /** Assign 1 damage to a fighter during damage split */
 export function assignYennengaDamage(state: GameState, fighterId: string): GameState {
   const s = clone(state);
@@ -693,10 +760,12 @@ export function unassignYennengaDamage(state: GameState, fighterId: string): Gam
 /** Confirm the damage split and apply damage */
 export function confirmYennengaDamageSplit(state: GameState): GameState {
   const s = clone(state);
-  if (!s.yennengaDamageSplit || !s.combat) return s;
+  if (!s.yennengaDamageSplit) return s;
   const split = s.yennengaDamageSplit;
   const assigned = Object.values(split.assignments).reduce((a, b) => a + b, 0);
   if (assigned !== split.totalDamage) return s; // must assign all damage
+
+  const continuation = split.continuation;
 
   // Apply damage to each fighter
   for (const [fid, dmg] of Object.entries(split.assignments)) {
@@ -712,22 +781,20 @@ export function confirmYennengaDamageSplit(state: GameState): GameState {
   s.yennengaDamageSplit = null;
   checkHeroDeath(s);
 
-  // If this is a Rain of Arrows follow-up, finish that combat
-  if (s.rainOfArrowsFollowUp && s.combat && !s.combat.attackCard) {
-    if (s.combat.defenseCard) {
-      const defPlayer = s.players[getFighter(s, s.combat.defenderId)!.owner];
-      defPlayer.discard.push(s.combat.defenseCard);
-    }
-    s.rainOfArrowsFollowUp = null;
-    s.combat = null;
-    if (s.phase !== 'gameOver') {
-      useAction(s);
-    }
-    return s;
+  switch (continuation) {
+    case 'afterCombat':
+      return continueAfterCombat(s);
+    case 'rainFollowUp':
+      return finishRainOfArrowsFollowUp(s);
+    case 'effectQueue':
+      return continueEffectQueue(s);
+    case 'playing':
+    default:
+      if (s.phase !== 'gameOver') {
+        s.phase = 'playing';
+      }
+      return s;
   }
-
-  // Continue to after-combat effects
-  return continueAfterCombat(s);
 }
 
 /** Continue from damage to after-combat effects (used by both normal flow and Yennenga split) */
@@ -853,25 +920,8 @@ export function resolveRainOfArrowsDefense(state: GameState, cardId: string | nu
   addLog(s, `Follow-up Attack: ${atkValue} vs Defense: ${defValue}`);
 
   if (damage > 0) {
-    // Yennenga damage splitting applies here too
-    if (defPlayer.characterId === 'yennenga') {
-      const friendliesInZone = getAliveFighters(s, defender.owner).filter(f =>
-        f.id !== defender.id && sameZone(s.board, f.spaceId, defender.spaceId)
-      );
-      if (friendliesInZone.length > 0) {
-        const eligible = [defender, ...friendliesInZone];
-        s.yennengaDamageSplit = {
-          totalDamage: damage,
-          assignments: {},
-          eligibleFighterIds: eligible.map(f => f.id),
-        };
-        for (const f of eligible) {
-          s.yennengaDamageSplit.assignments[f.id] = 0;
-        }
-        s.phase = 'yennenga_damage_split';
-        addLog(s, `Yennenga: Distribute ${damage} damage among your fighters in the zone.`);
-        return s;
-      }
+    if (tryYennengaDamageSplit(s, defender, damage, 'rainFollowUp')) {
+      return s;
     }
     defender.hp = Math.max(0, defender.hp - damage);
     addLog(s, `${defender.name} takes ${damage} damage! (${defender.hp} HP remaining)`);
@@ -879,15 +929,20 @@ export function resolveRainOfArrowsDefense(state: GameState, cardId: string | nu
     addLog(s, `Follow-up attack blocked!`);
   }
 
-  // Discard follow-up defense card
-  if (s.combat.defenseCard) {
-    defPlayer.discard.push(s.combat.defenseCard);
-  }
+  return finishRainOfArrowsFollowUp(s);
+}
 
+function finishRainOfArrowsFollowUp(s: GameState): GameState {
+  if (s.combat) {
+    const defender = getFighter(s, s.combat.defenderId)!;
+    const defPlayer = s.players[defender.owner];
+    if (s.combat.defenseCard) {
+      defPlayer.discard.push(s.combat.defenseCard);
+    }
+  }
   s.rainOfArrowsFollowUp = null;
   s.combat = null;
   checkHeroDeath(s);
-
   if (s.phase !== 'gameOver') {
     useAction(s);
   }
@@ -1192,6 +1247,17 @@ function resolveCombat(state: GameState): GameState {
         addLog(s, `Sky Bison Swap: Aang is not the defender, no swap.`);
       }
     }
+    // Fan Sweep: push the opposing fighter up to N spaces
+    if (effect.type === 'pushFighter' && !s.combat.defenderEffectsCancelled) {
+      const pushTarget = attacker; // defender pushes the attacker
+      if (pushTarget.hp > 0 && effect.amount && effect.amount > 0) {
+        s.pushTargetId = pushTarget.id;
+        s.pushRange = effect.amount;
+        s.phase = 'combat_immediately_push';
+        addLog(s, `${defCardDef?.name}: Move ${pushTarget.name} up to ${effect.amount} space(s).`);
+        return s;
+      }
+    }
   }
 
   // Process attacker's IMMEDIATELY effects (only if not cancelled)
@@ -1294,16 +1360,14 @@ function resolveCombat(state: GameState): GameState {
       if (effect.type === 'preventEffectDamage') {
         addLog(s, `Psychic Barrier: Effect damage is prevented this combat.`);
       }
-      // Fan Sweep: move defending fighter up to N spaces (auto-resolve: pick closest unoccupied adjacent space)
+      // Fan Sweep: push the opposing fighter up to N spaces
       if (effect.type === 'pushFighter' && effect.amount) {
-        const pushSpaces = getPushSpaces(s, defender.id, effect.amount);
-        if (pushSpaces.length > 0) {
-          // Auto-pick first valid push space
-          const target = pushSpaces[0];
-          defender.spaceId = target;
-          addLog(s, `${atkCardDef?.name}: ${defender.name} moved to ${target}!`);
-        } else {
-          addLog(s, `${atkCardDef?.name}: No valid spaces to move ${defender.name}.`);
+        if (defender.hp > 0) {
+          s.pushTargetId = defender.id;
+          s.pushRange = effect.amount;
+          s.phase = 'combat_immediately_push';
+          addLog(s, `${atkCardDef?.name}: Move ${defender.name} up to ${effect.amount} space(s).`);
+          return s;
         }
       }
     }
@@ -1383,6 +1447,20 @@ function resolveCombat(state: GameState): GameState {
       }
     }
   }
+
+  // All immediately effects processed — continue to during-combat phase
+  return continueCombatAfterImmediately(s);
+}
+
+/** Resume combat after all immediately effects (including interactive push) are resolved */
+function continueCombatAfterImmediately(s: GameState): GameState {
+  if (!s.combat) return s;
+
+  const attacker = getFighter(s, s.combat.attackerId)!;
+  const defender = getFighter(s, s.combat.defenderId)!;
+  const defPlayer = s.players[defender.owner];
+  const defCharDef = getCharDef(defPlayer.characterId);
+  const defCardDef = s.combat.defenseCard ? getCardDef(s.combat.defenseCard, defCharDef) : null;
 
   // ===== PHASE 2: DURING COMBAT =====
   const defDuring = (!s.combat.defenderEffectsCancelled
@@ -1722,27 +1800,8 @@ function resolveCombatDamage(state: GameState): GameState {
   if (preventDamage) {
     addLog(s, `All damage prevented!`);
   } else if (damage > 0) {
-    // Yennenga damage splitting: if defender is Yennenga player and has other fighters in same zone
-    const defCharId = defPlayer.characterId;
-    if (defCharId === 'yennenga') {
-      const friendliesInZone = getAliveFighters(s, defender.owner).filter(f =>
-        f.id !== defender.id && sameZone(s.board, f.spaceId, defender.spaceId)
-      );
-      if (friendliesInZone.length > 0) {
-        // Pause for damage split
-        const eligible = [defender, ...friendliesInZone];
-        s.yennengaDamageSplit = {
-          totalDamage: damage,
-          assignments: {},
-          eligibleFighterIds: eligible.map(f => f.id),
-        };
-        for (const f of eligible) {
-          s.yennengaDamageSplit.assignments[f.id] = 0;
-        }
-        s.phase = 'yennenga_damage_split';
-        addLog(s, `Yennenga: Distribute ${damage} damage among your fighters in the zone.`);
-        return s;
-      }
+    if (tryYennengaDamageSplit(s, defender, damage, 'afterCombat')) {
+      return s;
     }
     defender.hp = Math.max(0, defender.hp - damage);
     addLog(s, `${defender.name} takes ${damage} damage! (${defender.hp} HP remaining)`);
@@ -2066,23 +2125,39 @@ function processAfterCombatEffect(
     case 'boomerangBounceDamage': {
       // Boomerang Bounce: if boomerang OUT, deal 1 damage to a fighter in the opposing fighter's zone
       if (!state.sokkaBoomerangReady[selfPlayer.index] && opponent.hp > 0) {
-        // Find all enemy fighters in the opponent's zone
         const opponentIdx = selfPlayer.index === 0 ? 1 : 0;
         const enemiesInZone = getAliveFighters(state, opponentIdx).filter(f =>
           sameZone(state.board, f.spaceId, opponent.spaceId)
         );
         if (enemiesInZone.length === 1) {
-          // Only one target — auto-deal
-          enemiesInZone[0].hp = Math.max(0, enemiesInZone[0].hp - (effect.amount || 1));
-          addLog(state, `Boomerang Bounce: Boomerang is OUT — deals ${effect.amount || 1} damage to ${enemiesInZone[0].name}! (${enemiesInZone[0].hp} HP)`);
-          checkHeroDeath(state);
+          // Only one target — check if Yennenga player needs split
+          const target = enemiesInZone[0];
+          const targetOwnerChar = state.players[target.owner].characterId;
+          const friendliesInZone = targetOwnerChar === 'yennenga'
+            ? getAliveFighters(state, target.owner).filter(f =>
+                f.id !== target.id && sameZone(state.board, f.spaceId, target.spaceId)
+              )
+            : [];
+          if (friendliesInZone.length > 0) {
+            // Queue interactive zone damage for Yennenga split
+            queue.push({
+              type: 'zoneDamageTarget',
+              playerIndex: selfPlayer.index,
+              damageAmount: effect.amount || 1,
+              fighterId: opponent.id,
+              label: `Boomerang Bounce: Deal ${effect.amount || 1} damage (Yennenga may split).`,
+            });
+          } else {
+            target.hp = Math.max(0, target.hp - (effect.amount || 1));
+            addLog(state, `Boomerang Bounce: Boomerang is OUT — deals ${effect.amount || 1} damage to ${target.name}! (${target.hp} HP)`);
+            checkHeroDeath(state);
+          }
         } else if (enemiesInZone.length > 1) {
-          // Multiple targets — queue interactive selection
           queue.push({
             type: 'zoneDamageTarget',
             playerIndex: selfPlayer.index,
             damageAmount: effect.amount || 1,
-            fighterId: opponent.id, // reference fighter for zone
+            fighterId: opponent.id,
             label: `Boomerang Bounce: Choose an enemy fighter in the opposing fighter's zone to deal ${effect.amount || 1} damage.`,
           });
         }
@@ -2447,11 +2522,16 @@ export function resolveZoneDamageTarget(state: GameState, targetFighterId: strin
   const targets = getZoneDamageTargets(s);
   const target = targets.find(f => f.id === targetFighterId);
   if (!target) return s; // invalid target, wait for valid input
-  target.hp = Math.max(0, target.hp - s.zoneDamageAmount);
-  addLog(s, `Boomerang Bounce: Deals ${s.zoneDamageAmount} damage to ${target.name}! (${target.hp} HP)`);
-  checkHeroDeath(s);
+  const dmg = s.zoneDamageAmount;
   s.zoneDamageTargetZone = '';
   s.zoneDamageAmount = 0;
+  addLog(s, `Boomerang Bounce: Targets ${target.name}!`);
+  if (tryYennengaDamageSplit(s, target, dmg, 'effectQueue')) {
+    return s;
+  }
+  target.hp = Math.max(0, target.hp - dmg);
+  addLog(s, `${target.name} takes ${dmg} damage! (${target.hp} HP)`);
+  checkHeroDeath(s);
   return continueEffectQueue(s);
 }
 

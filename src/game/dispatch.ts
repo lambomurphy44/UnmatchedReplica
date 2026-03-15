@@ -21,6 +21,7 @@ import {
   resolveTeleport, skipTeleport,
   resolveCloneRushDiscard,
   useSokkaBoomerang, skipSokkaBoomerang,
+  resolveCombatImmediatelyPush, skipCombatImmediatelyPush,
   resolveImprovisedShield, skipImprovisedShield,
   resolvePrecisionThrow, skipPrecisionThrow,
   resolveZoneDamageTarget,
@@ -131,6 +132,10 @@ export function dispatchAction(state: GameState, actionType: string, args: Recor
         return useSokkaBoomerang(state, args.targetFighterId as string);
       case 'skipSokkaBoomerang':
         return skipSokkaBoomerang(state);
+      case 'resolveCombatImmediatelyPush':
+        return resolveCombatImmediatelyPush(state, args.spaceId as string);
+      case 'skipCombatImmediatelyPush':
+        return skipCombatImmediatelyPush(state);
       case 'resolveImprovisedShield':
         return resolveImprovisedShield(state);
       case 'skipImprovisedShield':

@@ -868,7 +868,7 @@ const yennengaCards: CardDef[] = [
     type: 'attack',
     value: 3,
     boost: 3,
-    restriction: 'any',
+    restriction: 'hero',
     quantity: 3,
     effects: [
       { type: 'rainOfArrowsFollowUp', timing: 'afterCombat', amount: 3 },
@@ -894,7 +894,7 @@ const yennengaCards: CardDef[] = [
     type: 'defense',
     value: 3,
     boost: 3,
-    restriction: 'any',
+    restriction: 'hero',
     quantity: 2,
     effects: [],
     effectText: 'IMMEDIATELY: Your opponent may discard a card. If they don\'t, return a defeated Archer to a space in Yennenga\'s zone.',
@@ -918,7 +918,7 @@ const yennengaCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 2,
-    restriction: 'any',
+    restriction: 'hero',
     quantity: 3,
     effects: [
       { type: 'dealDamageAfterCombat', timing: 'afterCombat', amount: 2 },
@@ -957,7 +957,7 @@ const yennengaCards: CardDef[] = [
     type: 'versatile',
     value: 1,
     boost: 2,
-    restriction: 'any',
+    restriction: 'sidekick',
     quantity: 2,
     effects: [
       { type: 'pushOpponent', timing: 'afterCombat', amount: 4 },
