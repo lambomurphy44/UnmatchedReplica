@@ -13,6 +13,9 @@ import mewtwoPortrait from '../assets/Mewtwo.png';
 import clone1Portrait from '../assets/Mewtwo Clone 1.png';
 import clone2Portrait from '../assets/Mewtwo Clone 2.png';
 import clone3Portrait from '../assets/Mewtwo Clone 3.png';
+import yennengaPortrait from '../assets/Yennenga.png';
+import archer1Portrait from '../assets/Archer 1.png';
+import archer2Portrait from '../assets/Archer 2.png';
 
 
 interface BoardProps {
@@ -51,6 +54,12 @@ function getPortrait(f: Fighter): string {
     if (f.name.endsWith(' 2')) return clone2Portrait;
     if (f.name.endsWith(' 3')) return clone3Portrait;
     return clone1Portrait;
+  }
+  if (f.characterId === 'yennenga') {
+    if (f.isHero) return yennengaPortrait;
+    if (f.name.endsWith(' 1')) return archer1Portrait;
+    if (f.name.endsWith(' 2')) return archer2Portrait;
+    return archer1Portrait;
   }
 
   if (f.isHero) return medusaPortrait;

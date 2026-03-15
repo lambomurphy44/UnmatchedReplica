@@ -841,4 +841,183 @@ export const MEWTWO: CharacterDef = {
   },
 };
 
-export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA, AANG, MEWTWO];
+// =============================================
+// YENNENGA (with Archers) — 30 cards
+// =============================================
+
+const yennengaCards: CardDef[] = [
+  // ---- Hero (Yennenga only) ----
+  {
+    id: 'yennenga_stallion_charge',
+    name: 'Stallion Charge',
+    type: 'versatile',
+    value: 3,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 3,
+    effects: [
+      { type: 'moveSelf', timing: 'afterCombat', amount: 5 },
+    ],
+    effectText: 'AFTER COMBAT: Move Yennenga up to 5 spaces. She may move through opposing fighters.',
+  },
+
+  // ---- Any fighter ----
+  {
+    id: 'yennenga_rain_of_arrows',
+    name: 'Rain of Arrows',
+    type: 'attack',
+    value: 3,
+    boost: 3,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'dealDamageIfWon', timing: 'afterCombat', amount: 3 },
+    ],
+    effectText: 'AFTER COMBAT: If you won the combat, deal 3 additional damage to the opposing fighter.',
+  },
+  {
+    id: 'yennenga_surprise_volley',
+    name: 'Surprise Volley',
+    type: 'attack',
+    value: 3,
+    boost: 3,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'gainActionAndDraw', timing: 'immediately' },
+    ],
+    effectText: 'IMMEDIATELY: You may return a defeated Archer to a space in the opposing fighter\'s zone. If you do, that Archer is now the attacker. If you don\'t, gain 1 action.',
+  },
+  {
+    id: 'yennenga_shield_formation',
+    name: 'Shield Formation',
+    type: 'defense',
+    value: 3,
+    boost: 3,
+    restriction: 'any',
+    quantity: 2,
+    effects: [],
+    effectText: 'IMMEDIATELY: Your opponent may discard a card. If they don\'t, return a defeated Archer to a space in Yennenga\'s zone.',
+  },
+  {
+    id: 'yennenga_jaws_of_the_beast',
+    name: 'Jaws of the Beast',
+    type: 'versatile',
+    value: 3,
+    boost: 3,
+    restriction: 'any',
+    quantity: 3,
+    effects: [],
+    effectText: 'DURING COMBAT: For each zone the opposing fighter is in, increase the value of this card by +1.',
+  },
+  {
+    id: 'yennenga_point_blank',
+    name: 'Point Blank',
+    type: 'versatile',
+    value: 2,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'dealDamageIfWon', timing: 'afterCombat', amount: 2 },
+    ],
+    effectText: 'AFTER COMBAT: If the opposing fighter is adjacent to Yennenga, deal 2 damage to that fighter.',
+  },
+  {
+    id: 'yennenga_momentous_shift',
+    name: 'Momentous Shift',
+    type: 'versatile',
+    value: 3,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'valueIfMoved', timing: 'duringCombat', amount: 5 },
+    ],
+    effectText: 'DURING COMBAT: If your fighter started this turn in a different space, this card has a value of 5 instead.',
+  },
+  {
+    id: 'yennenga_divide_and_conquer',
+    name: 'Divide and Conquer',
+    type: 'versatile',
+    value: 2,
+    boost: 1,
+    restriction: 'any',
+    quantity: 2,
+    effects: [],
+    effectText: 'DURING COMBAT: If your fighter is not in Yennenga\'s zone, the value of this card is 4 instead.',
+  },
+  {
+    id: 'yennenga_pin_the_prey',
+    name: 'Pin the Prey',
+    type: 'versatile',
+    value: 1,
+    boost: 2,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'opponentDiscards', timing: 'afterCombat', amount: 1 },
+    ],
+    effectText: 'AFTER COMBAT: Move the opposing fighter up to 4 spaces. Your opponent discards 1 card.',
+  },
+  {
+    id: 'yennenga_skirmish',
+    name: 'Skirmish',
+    type: 'versatile',
+    value: 4,
+    boost: 1,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'moveFighterIfWon', timing: 'afterCombat', amount: 2 },
+    ],
+    effectText: 'AFTER COMBAT: If you won the combat, choose one of the fighters in the combat and move them up to 2 spaces.',
+  },
+  {
+    id: 'yennenga_master_of_the_hunt',
+    name: 'Master of the Hunt',
+    type: 'scheme',
+    value: 0,
+    boost: 3,
+    restriction: 'any',
+    quantity: 2,
+    effects: [],
+    effectText: 'Gain 2 actions.',
+  },
+  {
+    id: 'yennenga_one_with_the_land',
+    name: 'One With the Land',
+    type: 'scheme',
+    value: 0,
+    boost: 2,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'drawCards', timing: 'immediately', amount: 1 },
+    ],
+    effectText: 'Move each of your fighters up to 2 spaces. Each of your fighters recovers 1 health. Draw 1 card.',
+  },
+];
+
+export const YENNENGA: CharacterDef = {
+  id: 'yennenga',
+  name: 'Yennenga',
+  hp: 15,
+  isRanged: true,
+  moveValue: 2,
+  sidekick: {
+    name: 'Archer',
+    hp: 2,
+    isRanged: true,
+    moveValue: 2,
+    quantity: 2,
+  },
+  deckCards: yennengaCards,
+  ability: {
+    name: 'Shield of the Archers',
+    description: 'If Yennenga would take damage, you may assign any amount of that damage to one or more Archers in her zone instead. You may not assign more damage to an Archer than their remaining health.',
+    timing: 'duringAttack',
+  },
+};
+
+export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA, AANG, MEWTWO, YENNENGA];
