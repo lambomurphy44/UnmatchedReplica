@@ -871,9 +871,9 @@ const yennengaCards: CardDef[] = [
     restriction: 'any',
     quantity: 3,
     effects: [
-      { type: 'dealDamageIfWon', timing: 'afterCombat', amount: 3 },
+      { type: 'rainOfArrowsFollowUp', timing: 'afterCombat', amount: 3 },
     ],
-    effectText: 'AFTER COMBAT: If you won the combat, deal 3 additional damage to the opposing fighter.',
+    effectText: 'AFTER COMBAT: Make a follow-up attack with value 3 and no effects. The defender may play a new defense card.',
   },
   {
     id: 'yennenga_surprise_volley',
@@ -905,7 +905,7 @@ const yennengaCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 3,
-    restriction: 'any',
+    restriction: 'hero',
     quantity: 3,
     effects: [
       { type: 'plusPerZone', timing: 'duringCombat', amount: 1 },
@@ -944,7 +944,7 @@ const yennengaCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 1,
-    restriction: 'any',
+    restriction: 'sidekick',
     quantity: 2,
     effects: [
       { type: 'valueIfDifferentZone', timing: 'duringCombat', amount: 4 },
@@ -1110,7 +1110,7 @@ const sokkaCards: CardDef[] = [
       { type: 'boomerangSetupValue', timing: 'duringCombat', amount: 4 },
       { type: 'boomerangReadyAfterCombat', timing: 'afterCombat' },
     ],
-    effectText: 'IMMEDIATELY: If the Boomerang is OUT, this card\'s value is 4 instead. AFTER COMBAT: If the Boomerang is OUT, you may flip it to READY.',
+    effectText: 'DURING COMBAT: If the Boomerang is OUT, this card\'s value is 4 instead.\nAFTER COMBAT: Flip the Boomerang to READY.',
   },
   {
     id: 'sokka_reel_it_back',

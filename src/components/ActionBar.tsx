@@ -7,9 +7,13 @@ interface ActionBarProps {
   onManeuver: () => void;
   onStartAttack: (fighterId: string) => void;
   onStartScheme: () => void;
+  onUseBoomerang?: () => void;
+  boomerangReady?: boolean;
+  undoAvailable?: boolean;
+  onUndo?: () => void;
 }
 
-export const ActionBar: React.FC<ActionBarProps> = ({ state, onManeuver, onStartAttack, onStartScheme }) => {
+export const ActionBar: React.FC<ActionBarProps> = ({ state, onManeuver, onStartAttack, onStartScheme, onUseBoomerang, boomerangReady, undoAvailable, onUndo }) => {
   const player = currentPlayer(state);
   const alive = getAliveFighters(state, state.currentPlayer);
   const charDef = getCharDef(player.characterId);
@@ -37,6 +41,9 @@ export const ActionBar: React.FC<ActionBarProps> = ({ state, onManeuver, onStart
     <div className="action-bar">
       <div className="action-label">
         {player.name}'s turn - {player.actionsRemaining} action(s) remaining. Choose:
+        {undoAvailable && onUndo && (
+          <button className="undo-btn inline-undo" onClick={onUndo}>Undo</button>
+        )}
       </div>
       <div className="action-buttons">
         <button className="action-btn maneuver" onClick={onManeuver}>
@@ -59,6 +66,13 @@ export const ActionBar: React.FC<ActionBarProps> = ({ state, onManeuver, onStart
           <button className="action-btn scheme" onClick={onStartScheme}>
             Play Scheme
             <small>Play a scheme card</small>
+          </button>
+        )}
+
+        {boomerangReady && onUseBoomerang && (
+          <button className="action-btn boomerang" onClick={onUseBoomerang}>
+            Use Boomerang
+            <small>Does not cost an action</small>
           </button>
         )}
       </div>

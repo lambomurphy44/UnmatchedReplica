@@ -151,6 +151,8 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
     zoneDamageAmount: 0,
     zoneDamagePlayerIndex: 0,
     stallionChargeActive: false,
+    rainOfArrowsFollowUp: null,
+    yennengaDamageSplit: null,
   };
 
   if (needsPlacement) {
@@ -601,6 +603,295 @@ export function skipImprovisedShield(state: GameState): GameState {
   if (!s.combat) return s;
   addLog(s, `Improvised Shield: Chose not to flip the Boomerang.`);
   return continueAttackerDuringCombat(s);
+}
+
+/** Precision Throw: player chooses to flip boomerang for value 6 */
+export function resolvePrecisionThrow(state: GameState): GameState {
+  const s = clone(state);
+  if (!s.combat) return s;
+  const attacker = getFighter(s, s.combat.attackerId)!;
+  s.sokkaBoomerangReady = [...s.sokkaBoomerangReady] as [boolean, boolean];
+  s.sokkaBoomerangReady[attacker.owner] = false;
+  addLog(s, `Precision Throw: Boomerang flipped to OUT! Value becomes 6!`);
+  return continuePrecisionThrowResume(s);
+}
+
+/** Precision Throw: player declines to flip boomerang */
+export function skipPrecisionThrow(state: GameState): GameState {
+  const s = clone(state);
+  if (!s.combat) return s;
+  addLog(s, `Precision Throw: Chose not to flip the Boomerang.`);
+  return continuePrecisionThrowResume(s);
+}
+
+/** Resume continueAttackerDuringCombat after Precision Throw choice, skipping the already-handled effect */
+function continuePrecisionThrowResume(s: GameState): GameState {
+  if (!s.combat) return s;
+
+  const attacker = getFighter(s, s.combat.attackerId)!;
+  const atkPlayer = s.players[attacker.owner];
+  const atkCharDef = getCharDef(atkPlayer.characterId);
+  const atkCardDef = s.combat.attackCard ? getCardDef(s.combat.attackCard, atkCharDef) : null;
+  const atkDuring = atkCardDef?.effects.filter(e => e.timing === 'duringCombat') || [];
+
+  // Continue processing remaining effects (skip boomerangFlipForValue since already handled)
+  let atkHasDuringBoost = false;
+  for (const effect of atkDuring) {
+    if (effect.type === 'boostAttack') {
+      if (atkPlayer.hand.length > 0) atkHasDuringBoost = true;
+    }
+    if (effect.type === 'discardToBoost') {
+      if (atkPlayer.hand.length > 0) atkHasDuringBoost = true;
+    }
+  }
+
+  if (atkHasDuringBoost) {
+    s.phase = 'combat_duringBoost';
+    const hasDiscardToBoost = atkDuring.some(e => e.type === 'discardToBoost');
+    if (hasDiscardToBoost) {
+      addLog(s, `${atkCardDef?.name}: You may discard a card for +2 value. Select a card or skip.`);
+    } else {
+      addLog(s, `${atkCardDef?.name}: You may play a card as a boost. Select a card or skip.`);
+    }
+    return s;
+  }
+
+  return resolveCombatDamage(s);
+}
+
+// ---- Yennenga Damage Split ----
+
+/** Assign 1 damage to a fighter during damage split */
+export function assignYennengaDamage(state: GameState, fighterId: string): GameState {
+  const s = clone(state);
+  if (!s.yennengaDamageSplit) return s;
+  const split = s.yennengaDamageSplit;
+  if (!split.eligibleFighterIds.includes(fighterId)) return s;
+
+  const assigned = Object.values(split.assignments).reduce((a, b) => a + b, 0);
+  if (assigned >= split.totalDamage) return s; // all damage assigned
+
+  // Don't assign more damage than the fighter has HP
+  const fighter = getFighter(s, fighterId);
+  if (!fighter || fighter.hp <= 0) return s;
+  if (split.assignments[fighterId] >= fighter.hp) return s; // can't overkill
+
+  split.assignments[fighterId] = (split.assignments[fighterId] || 0) + 1;
+  return s;
+}
+
+/** Remove 1 damage from a fighter during damage split */
+export function unassignYennengaDamage(state: GameState, fighterId: string): GameState {
+  const s = clone(state);
+  if (!s.yennengaDamageSplit) return s;
+  const split = s.yennengaDamageSplit;
+  if ((split.assignments[fighterId] || 0) <= 0) return s;
+  split.assignments[fighterId] -= 1;
+  return s;
+}
+
+/** Confirm the damage split and apply damage */
+export function confirmYennengaDamageSplit(state: GameState): GameState {
+  const s = clone(state);
+  if (!s.yennengaDamageSplit || !s.combat) return s;
+  const split = s.yennengaDamageSplit;
+  const assigned = Object.values(split.assignments).reduce((a, b) => a + b, 0);
+  if (assigned !== split.totalDamage) return s; // must assign all damage
+
+  // Apply damage to each fighter
+  for (const [fid, dmg] of Object.entries(split.assignments)) {
+    if (dmg > 0) {
+      const fighter = getFighter(s, fid);
+      if (fighter) {
+        fighter.hp = Math.max(0, fighter.hp - dmg);
+        addLog(s, `${fighter.name} takes ${dmg} damage! (${fighter.hp} HP remaining)`);
+      }
+    }
+  }
+
+  s.yennengaDamageSplit = null;
+  checkHeroDeath(s);
+
+  // If this is a Rain of Arrows follow-up, finish that combat
+  if (s.rainOfArrowsFollowUp && s.combat && !s.combat.attackCard) {
+    if (s.combat.defenseCard) {
+      const defPlayer = s.players[getFighter(s, s.combat.defenderId)!.owner];
+      defPlayer.discard.push(s.combat.defenseCard);
+    }
+    s.rainOfArrowsFollowUp = null;
+    s.combat = null;
+    if (s.phase !== 'gameOver') {
+      useAction(s);
+    }
+    return s;
+  }
+
+  // Continue to after-combat effects
+  return continueAfterCombat(s);
+}
+
+/** Continue from damage to after-combat effects (used by both normal flow and Yennenga split) */
+function continueAfterCombat(s: GameState): GameState {
+  if (!s.combat) return s;
+
+  const attacker = getFighter(s, s.combat.attackerId)!;
+  const defender = getFighter(s, s.combat.defenderId)!;
+  const atkPlayer = s.players[attacker.owner];
+  const defPlayer = s.players[defender.owner];
+  const atkCharDef = getCharDef(atkPlayer.characterId);
+  const defCharDef = getCharDef(defPlayer.characterId);
+  const atkCardDef = s.combat.attackCard ? getCardDef(s.combat.attackCard, atkCharDef) : null;
+  const defCardDef = s.combat.defenseCard ? getCardDef(s.combat.defenseCard, defCharDef) : null;
+
+  // ===== PHASE 4: AFTER COMBAT =====
+  const defAfter = (!s.combat.defenderEffectsCancelled
+    ? defCardDef?.effects.filter(e => e.timing === 'afterCombat') : []) || [];
+  const atkAfter = (!s.combat.attackerEffectsCancelled
+    ? atkCardDef?.effects.filter(e => e.timing === 'afterCombat') : []) || [];
+
+  const effectQueue: QueuedEffect[] = [];
+  const attackerWon = s.combat.attackerWon;
+
+  for (const effect of defAfter) {
+    processAfterCombatEffect(s, effect, defender, attacker, defPlayer, atkPlayer, !attackerWon, effectQueue);
+  }
+
+  for (const effect of atkAfter) {
+    processAfterCombatEffect(s, effect, attacker, defender, atkPlayer, defPlayer, attackerWon, effectQueue);
+  }
+
+  // Mewtwo Clone Vats ability
+  if (attackerWon && !attacker.isHero && attacker.characterId === 'mewtwo') {
+    drawCards(s, atkPlayer.index, 1);
+    addLog(s, `Clone Vats: Clone won combat — ${atkPlayer.name} draws 1 card!`);
+  }
+
+  // Discard combat cards
+  if (s.combat.attackCard) atkPlayer.discard.push(s.combat.attackCard);
+  if (s.combat.attackBoostCard) atkPlayer.discard.push(s.combat.attackBoostCard);
+  if (s.combat.duringCombatBoost) atkPlayer.discard.push(s.combat.duringCombatBoost);
+  if (s.combat.defenseCard) defPlayer.discard.push(s.combat.defenseCard);
+
+  s.combat = null;
+  checkHeroDeath(s);
+
+  if (effectQueue.length > 0) {
+    s.effectQueue = effectQueue;
+    return processNextEffect(s);
+  }
+
+  return checkRainOfArrowsFollowUp(s);
+}
+
+/** Check and start Rain of Arrows follow-up combat, or finish turn */
+function checkRainOfArrowsFollowUp(s: GameState): GameState {
+  if (s.phase === 'gameOver') return s;
+
+  if (s.rainOfArrowsFollowUp) {
+    const followUp = s.rainOfArrowsFollowUp;
+    s.rainOfArrowsFollowUp = null;
+    const atk = getFighter(s, followUp.attackerId);
+    const def = getFighter(s, followUp.defenderId);
+    if (atk && def && atk.hp > 0 && def.hp > 0) {
+      // Set up a follow-up combat
+      s.combat = {
+        attackerId: followUp.attackerId,
+        defenderId: followUp.defenderId,
+        attackCard: null,
+        defenseCard: null,
+        attackBoostCard: null,
+        duringCombatBoost: null,
+        attackerEffectsCancelled: false,
+        defenderEffectsCancelled: false,
+        damageDealt: 0,
+        attackerWon: false,
+        airScooterUsed: false,
+      };
+      // Store the follow-up value for damage resolution
+      s.rainOfArrowsFollowUp = { ...followUp }; // re-store for damage calc
+      s.phase = 'rain_of_arrows_followup';
+      addLog(s, `Rain of Arrows: Follow-up attack (value ${followUp.value})! ${def.name}, play a defense card or take the hit.`);
+      return s;
+    }
+  }
+
+  useAction(s);
+  return s;
+}
+
+/** Defender plays a defense card (or skips) for Rain of Arrows follow-up */
+export function resolveRainOfArrowsDefense(state: GameState, cardId: string | null): GameState {
+  const s = clone(state);
+  if (!s.combat || !s.rainOfArrowsFollowUp) return s;
+
+  const followUp = s.rainOfArrowsFollowUp;
+  const defender = getFighter(s, s.combat.defenderId)!;
+  const defPlayer = s.players[defender.owner];
+  const defCharDef = getCharDef(defPlayer.characterId);
+
+  let defValue = 0;
+  let defCardDef: ReturnType<typeof getCardDef> = undefined;
+
+  if (cardId) {
+    const cardIdx = defPlayer.hand.findIndex(c => c.id === cardId);
+    if (cardIdx >= 0) {
+      const card = defPlayer.hand.splice(cardIdx, 1)[0];
+      s.combat.defenseCard = card;
+      defCardDef = getCardDef(card, defCharDef);
+      defValue = defCardDef?.value || 0;
+      addLog(s, `${defPlayer.name} defends with ${defCardDef?.name} (value ${defValue}).`);
+    }
+  } else {
+    addLog(s, `${defPlayer.name} takes the hit (no defense).`);
+  }
+
+  const atkValue = followUp.value;
+  const damage = Math.max(0, atkValue - defValue);
+  s.combat.damageDealt = damage;
+  s.combat.attackerWon = atkValue > defValue;
+
+  addLog(s, `Follow-up Attack: ${atkValue} vs Defense: ${defValue}`);
+
+  if (damage > 0) {
+    // Yennenga damage splitting applies here too
+    if (defPlayer.characterId === 'yennenga') {
+      const friendliesInZone = getAliveFighters(s, defender.owner).filter(f =>
+        f.id !== defender.id && sameZone(s.board, f.spaceId, defender.spaceId)
+      );
+      if (friendliesInZone.length > 0) {
+        const eligible = [defender, ...friendliesInZone];
+        s.yennengaDamageSplit = {
+          totalDamage: damage,
+          assignments: {},
+          eligibleFighterIds: eligible.map(f => f.id),
+        };
+        for (const f of eligible) {
+          s.yennengaDamageSplit.assignments[f.id] = 0;
+        }
+        s.phase = 'yennenga_damage_split';
+        addLog(s, `Yennenga: Distribute ${damage} damage among your fighters in the zone.`);
+        return s;
+      }
+    }
+    defender.hp = Math.max(0, defender.hp - damage);
+    addLog(s, `${defender.name} takes ${damage} damage! (${defender.hp} HP remaining)`);
+  } else {
+    addLog(s, `Follow-up attack blocked!`);
+  }
+
+  // Discard follow-up defense card
+  if (s.combat.defenseCard) {
+    defPlayer.discard.push(s.combat.defenseCard);
+  }
+
+  s.rainOfArrowsFollowUp = null;
+  s.combat = null;
+  checkHeroDeath(s);
+
+  if (s.phase !== 'gameOver') {
+    useAction(s);
+  }
+  return s;
 }
 
 // ---- Maneuver ----
@@ -1171,12 +1462,12 @@ function continueAttackerDuringCombat(s: GameState): GameState {
         addLog(s, `${atkCardDef?.name}: Opposing fighter moved this turn, value becomes ${effect.amount}!`);
       }
     }
-    // Precision Throw: if boomerang READY, flip to OUT, value becomes 6
+    // Precision Throw: if boomerang READY, may flip to OUT, value becomes 6
     if (effect.type === 'boomerangFlipForValue') {
       if (s.sokkaBoomerangReady[attacker.owner]) {
-        s.sokkaBoomerangReady = [...s.sokkaBoomerangReady] as [boolean, boolean];
-        s.sokkaBoomerangReady[attacker.owner] = false;
-        addLog(s, `${atkCardDef?.name}: Boomerang flipped to OUT! Value becomes ${effect.amount}!`);
+        s.phase = 'sokka_precision_throw';
+        addLog(s, `Precision Throw: You may flip the Boomerang to OUT for value ${effect.amount}.`);
+        return s;
       }
     }
     // Boomerang Set-Up: if boomerang is OUT, value becomes 4
@@ -1431,56 +1722,35 @@ function resolveCombatDamage(state: GameState): GameState {
   if (preventDamage) {
     addLog(s, `All damage prevented!`);
   } else if (damage > 0) {
+    // Yennenga damage splitting: if defender is Yennenga player and has other fighters in same zone
+    const defCharId = defPlayer.characterId;
+    if (defCharId === 'yennenga') {
+      const friendliesInZone = getAliveFighters(s, defender.owner).filter(f =>
+        f.id !== defender.id && sameZone(s.board, f.spaceId, defender.spaceId)
+      );
+      if (friendliesInZone.length > 0) {
+        // Pause for damage split
+        const eligible = [defender, ...friendliesInZone];
+        s.yennengaDamageSplit = {
+          totalDamage: damage,
+          assignments: {},
+          eligibleFighterIds: eligible.map(f => f.id),
+        };
+        for (const f of eligible) {
+          s.yennengaDamageSplit.assignments[f.id] = 0;
+        }
+        s.phase = 'yennenga_damage_split';
+        addLog(s, `Yennenga: Distribute ${damage} damage among your fighters in the zone.`);
+        return s;
+      }
+    }
     defender.hp = Math.max(0, defender.hp - damage);
     addLog(s, `${defender.name} takes ${damage} damage! (${defender.hp} HP remaining)`);
   } else {
     addLog(s, `Attack blocked!`);
   }
 
-  // ===== PHASE 4: AFTER COMBAT =====
-  // Collect after-combat effects: defender first, then attacker
-  const defAfter = (!s.combat.defenderEffectsCancelled
-    ? defCardDef?.effects.filter(e => e.timing === 'afterCombat') : []) || [];
-  const atkAfter = (!s.combat.attackerEffectsCancelled
-    ? atkCardDef?.effects.filter(e => e.timing === 'afterCombat') : []) || [];
-
-  const effectQueue: QueuedEffect[] = [];
-  const attackerWon = s.combat.attackerWon;
-
-  // Process defender's after-combat effects
-  for (const effect of defAfter) {
-    processAfterCombatEffect(s, effect, defender, attacker, defPlayer, atkPlayer, attackerWon ? false : !attackerWon && defValue > atkValue, effectQueue);
-  }
-
-  // Process attacker's after-combat effects
-  for (const effect of atkAfter) {
-    processAfterCombatEffect(s, effect, attacker, defender, atkPlayer, defPlayer, attackerWon, effectQueue);
-  }
-
-  // Mewtwo Clone Vats ability: if attacker was a Clone and won, draw 1 card
-  if (attackerWon && !attacker.isHero && attacker.characterId === 'mewtwo') {
-    drawCards(s, atkPlayer.index, 1);
-    addLog(s, `Clone Vats: Clone won combat — ${atkPlayer.name} draws 1 card!`);
-  }
-
-  // Discard combat cards
-  if (s.combat.attackCard) atkPlayer.discard.push(s.combat.attackCard);
-  if (s.combat.attackBoostCard) atkPlayer.discard.push(s.combat.attackBoostCard);
-  if (s.combat.duringCombatBoost) atkPlayer.discard.push(s.combat.duringCombatBoost);
-  if (s.combat.defenseCard) defPlayer.discard.push(s.combat.defenseCard);
-
-  s.combat = null;
-  checkHeroDeath(s);
-
-  // If there are interactive effects queued, process them
-  if (s.phase !== 'gameOver' && effectQueue.length > 0) {
-    s.effectQueue = effectQueue;
-    return processNextEffect(s);
-  }
-
-  if (s.phase !== 'gameOver') {
-    useAction(s);
-  }
+  return continueAfterCombat(s);
 
   return s;
 }
@@ -1821,12 +2091,10 @@ function processAfterCombatEffect(
     }
 
     case 'boomerangReadyAfterCombat': {
-      // Boomerang Set-Up: if boomerang OUT, flip to READY
-      if (!state.sokkaBoomerangReady[selfPlayer.index]) {
-        state.sokkaBoomerangReady = [...state.sokkaBoomerangReady] as [boolean, boolean];
-        state.sokkaBoomerangReady[selfPlayer.index] = true;
-        addLog(state, `Boomerang Set-Up: Boomerang flipped back to READY!`);
-      }
+      // Boomerang Set-Up: always flip boomerang to READY
+      state.sokkaBoomerangReady = [...state.sokkaBoomerangReady] as [boolean, boolean];
+      state.sokkaBoomerangReady[selfPlayer.index] = true;
+      addLog(state, `Boomerang Set-Up: Boomerang flipped to READY!`);
       break;
     }
 
@@ -1863,15 +2131,29 @@ function processAfterCombatEffect(
       break;
     }
 
-    case 'dealDamageAfterCombat': {
-      // Point Blank: deal damage to opponent unconditionally after combat
+    case 'rainOfArrowsFollowUp': {
+      // Rain of Arrows: set up a follow-up attack (processed after all other effects)
       if (opponent.hp > 0) {
-        // Check if opponent is adjacent to Yennenga (hero)
+        state.rainOfArrowsFollowUp = {
+          attackerId: self.id,
+          defenderId: opponent.id,
+          value: effect.amount || 3,
+        };
+        addLog(state, `Rain of Arrows: A follow-up attack is coming!`);
+      }
+      break;
+    }
+
+    case 'dealDamageAfterCombat': {
+      // Point Blank: deal damage to opponent if adjacent to Yennenga (checked at after-combat time)
+      if (opponent.hp > 0) {
         const hero = getHero(state, selfPlayer.index);
-        if (hero && areAdjacent(state.board, hero.spaceId, opponent.spaceId)) {
+        if (hero && hero.hp > 0 && areAdjacent(state.board, hero.spaceId, opponent.spaceId)) {
           opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
-          addLog(state, `Point Blank: Deals ${effect.amount} damage to ${opponent.name}! (${opponent.hp} HP)`);
+          addLog(state, `Point Blank: ${opponent.name} is adjacent to Yennenga — deals ${effect.amount} damage! (${opponent.hp} HP)`);
           checkHeroDeath(state);
+        } else {
+          addLog(state, `Point Blank: ${opponent.name} is not adjacent to Yennenga — no damage dealt.`);
         }
       }
       break;
@@ -1957,10 +2239,7 @@ export function selectDuringCombatBoost(state: GameState, cardId: string | null)
 
 function processNextEffect(state: GameState): GameState {
   if (state.effectQueue.length === 0) {
-    if (state.phase !== 'gameOver') {
-      useAction(state);
-    }
-    return state;
+    return checkRainOfArrowsFollowUp(state);
   }
 
   const effect = state.effectQueue[0];

@@ -127,6 +127,9 @@ export type Phase =
   | 'mewtwo_cloneRush_discard' // Clone Rush: choose a card from opponent's hand to discard
   | 'sokka_boomerang'          // Sokka: choose target for boomerang damage
   | 'sokka_improvised_shield'  // Sokka: choose whether to flip boomerang for Improvised Shield
+  | 'sokka_precision_throw'    // Sokka: choose whether to flip boomerang for Precision Throw
+  | 'yennenga_damage_split'    // Yennenga: split incoming damage among fighters in zone
+  | 'rain_of_arrows_followup'  // Yennenga: second attack from Rain of Arrows
   | 'discard_excess'
   | 'gameOver';
 
@@ -213,4 +216,18 @@ export interface GameState {
 
   // Yennenga-specific
   stallionChargeActive: boolean; // Stallion Charge: allows movement through enemies
+
+  // Rain of Arrows follow-up
+  rainOfArrowsFollowUp: {
+    attackerId: string;
+    defenderId: string;
+    value: number;
+  } | null;
+
+  // Yennenga damage splitting
+  yennengaDamageSplit: {
+    totalDamage: number;
+    assignments: Record<string, number>; // fighterId -> damage assigned
+    eligibleFighterIds: string[];        // fighters that can receive damage
+  } | null;
 }

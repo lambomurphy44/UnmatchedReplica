@@ -166,7 +166,7 @@ export const Game: React.FC = () => {
     }
 
     // Defender phases: the opponent of the current player interacts
-    if (gs.phase === 'attack_defenderCard' || gs.phase === 'effect_opponentDiscard' || gs.phase === 'sokka_improvised_shield') {
+    if (gs.phase === 'attack_defenderCard' || gs.phase === 'effect_opponentDiscard' || gs.phase === 'sokka_improvised_shield' || gs.phase === 'yennenga_damage_split' || gs.phase === 'rain_of_arrows_followup') {
       return gs.currentPlayer !== myIndex; // defender = opponent of current player
     }
 
@@ -301,6 +301,10 @@ export const Game: React.FC = () => {
       act('selectDefenseCard', { cardId });
       return;
     }
+    if (gs.phase === 'rain_of_arrows_followup') {
+      act('resolveRainOfArrowsDefense', { cardId });
+      return;
+    }
     if (gs.phase === 'scheme_selectCard') {
       act('playScheme', { cardId });
       return;
@@ -417,7 +421,7 @@ export const Game: React.FC = () => {
       const myCharDef = getCharDef(myPlayer.characterId);
 
       // Defender card selection: show defender's hand (only the defender sees this)
-      if (gs.phase === 'attack_defenderCard' && gs.currentPlayer !== myIndex) {
+      if ((gs.phase === 'attack_defenderCard' || gs.phase === 'rain_of_arrows_followup') && gs.currentPlayer !== myIndex) {
         const defender = gs.combat ? getFighter(gs, gs.combat.defenderId) : undefined;
         return (
           <CardHand
@@ -477,7 +481,7 @@ export const Game: React.FC = () => {
     }
 
     // Local/hot-seat mode: show hands as before
-    if (gs.phase === 'attack_defenderCard') {
+    if (gs.phase === 'attack_defenderCard' || gs.phase === 'rain_of_arrows_followup') {
       const defender = gs.combat ? getFighter(gs, gs.combat.defenderId) : undefined;
       return (
         <CardHand
@@ -718,11 +722,6 @@ export const Game: React.FC = () => {
 
   return (
     <div className="game-container">
-      {/* Undo button - local mode only */}
-      {mode === 'local' && stateHistory.length > 0 && gs.phase !== 'gameOver' && (
-        <button className="undo-btn" onClick={handleUndo}>Undo</button>
-      )}
-
       {/* Log toggle button */}
       <button className="log-toggle-btn" onClick={() => setLogOpen(o => !o)}>
         {logOpen ? 'Hide Log' : 'Log'}
@@ -804,30 +803,21 @@ export const Game: React.FC = () => {
       )}
 
       {canInteract && gs.phase === 'playing' && (
-        <>
-          <ActionBar
-            state={gs}
-            onManeuver={handleManeuver}
-            onStartAttack={handleStartAttack}
-            onStartScheme={handleStartScheme}
-          />
-          {gs.players[gs.currentPlayer].characterId === 'sokka' && gs.sokkaBoomerangReady[gs.currentPlayer] && (
-            <div style={{ textAlign: 'center', marginTop: '4px' }}>
-              <button
-                className="action-btn"
-                style={{ background: '#2e7d32', color: '#fff', fontWeight: 'bold', padding: '6px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer' }}
-                onClick={() => {
-                  const targets = getSokkaBoomerangTargets(gs);
-                  if (targets.length > 0) {
-                    act('enterBoomerangTargeting', {});
-                  }
-                }}
-              >
-                Use Boomerang!
-              </button>
-            </div>
-          )}
-        </>
+        <ActionBar
+          state={gs}
+          onManeuver={handleManeuver}
+          onStartAttack={handleStartAttack}
+          onStartScheme={handleStartScheme}
+          onUseBoomerang={gs.players[gs.currentPlayer].characterId === 'sokka' && gs.sokkaBoomerangReady[gs.currentPlayer] ? () => {
+            const targets = getSokkaBoomerangTargets(gs);
+            if (targets.length > 0) {
+              act('enterBoomerangTargeting', {});
+            }
+          } : undefined}
+          boomerangReady={gs.players[gs.currentPlayer].characterId === 'sokka' && gs.sokkaBoomerangReady[gs.currentPlayer]}
+          undoAvailable={mode === 'local' && stateHistory.length > 0}
+          onUndo={handleUndo}
+        />
       )}
 
       {canInteract && gs.phase === 'maneuver_boost' && (
@@ -937,6 +927,20 @@ export const Game: React.FC = () => {
         </div>
       )}
 
+      {canInteract && gs.phase === 'sokka_precision_throw' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Precision Throw: Flip Boomerang to OUT for value 6?
+          </div>
+          <button className="action-btn" onClick={() => act('resolvePrecisionThrow', {})}>
+            Flip Boomerang (value 6)
+          </button>
+          <button className="skip-btn" onClick={() => act('skipPrecisionThrow', {})}>
+            Keep Boomerang READY
+          </button>
+        </div>
+      )}
+
       {canInteract && gs.phase === 'combat_duringBoost' && (
         <div className="phase-prompt">
           <div className="phase-text">
@@ -944,6 +948,63 @@ export const Game: React.FC = () => {
           </div>
           <button className="skip-btn" onClick={() => act('selectDuringCombatBoost', { cardId: null })}>
             Skip Boost
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'yennenga_damage_split' && gs.yennengaDamageSplit && (() => {
+        const split = gs.yennengaDamageSplit;
+        const assigned = Object.values(split.assignments).reduce((a, b) => a + b, 0);
+        const remaining = split.totalDamage - assigned;
+        return (
+          <div className="phase-prompt">
+            <div className="phase-text">
+              Distribute {split.totalDamage} damage among your fighters ({remaining} remaining):
+              {mode === 'local' && <span className="warning"> (Yennenga player distributes)</span>}
+            </div>
+            <div className="damage-split-controls">
+              {split.eligibleFighterIds.map(fid => {
+                const f = getFighter(gs, fid);
+                if (!f) return null;
+                const dmg = split.assignments[fid] || 0;
+                return (
+                  <div key={fid} className="damage-split-row">
+                    <span>{f.name} ({f.hp} HP): <strong>{dmg}</strong> damage</span>
+                    <button
+                      className="action-btn"
+                      style={{ padding: '2px 8px', fontSize: '0.8rem' }}
+                      disabled={remaining <= 0 || dmg >= f.hp}
+                      onClick={() => act('assignYennengaDamage', { fighterId: fid })}
+                    >+1</button>
+                    <button
+                      className="action-btn"
+                      style={{ padding: '2px 8px', fontSize: '0.8rem' }}
+                      disabled={dmg <= 0}
+                      onClick={() => act('unassignYennengaDamage', { fighterId: fid })}
+                    >-1</button>
+                  </div>
+                );
+              })}
+            </div>
+            <button
+              className="action-btn"
+              disabled={remaining !== 0}
+              onClick={() => act('confirmYennengaDamageSplit', {})}
+            >
+              Confirm Split
+            </button>
+          </div>
+        );
+      })()}
+
+      {canInteract && gs.phase === 'rain_of_arrows_followup' && (
+        <div className="phase-prompt defender-prompt">
+          <div className="phase-text">
+            Rain of Arrows follow-up attack (value {gs.rainOfArrowsFollowUp?.value || 3})! Select a defense card or take the hit.
+            {mode === 'local' && <span className="warning"> (Hand the device to the defender!)</span>}
+          </div>
+          <button className="skip-btn" onClick={() => act('resolveRainOfArrowsDefense', { cardId: null })}>
+            Take the hit (no defense)
           </button>
         </div>
       )}

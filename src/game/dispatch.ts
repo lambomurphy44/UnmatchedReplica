@@ -22,7 +22,10 @@ import {
   resolveCloneRushDiscard,
   useSokkaBoomerang, skipSokkaBoomerang,
   resolveImprovisedShield, skipImprovisedShield,
+  resolvePrecisionThrow, skipPrecisionThrow,
   resolveZoneDamageTarget,
+  assignYennengaDamage, unassignYennengaDamage, confirmYennengaDamageSplit,
+  resolveRainOfArrowsDefense,
 } from './engine';
 
 /**
@@ -132,8 +135,21 @@ export function dispatchAction(state: GameState, actionType: string, args: Recor
         return resolveImprovisedShield(state);
       case 'skipImprovisedShield':
         return skipImprovisedShield(state);
+      case 'resolvePrecisionThrow':
+        return resolvePrecisionThrow(state);
+      case 'skipPrecisionThrow':
+        return skipPrecisionThrow(state);
       case 'resolveZoneDamageTarget':
         return resolveZoneDamageTarget(state, args.targetFighterId as string);
+      // Yennenga damage split
+      case 'assignYennengaDamage':
+        return assignYennengaDamage(state, args.fighterId as string);
+      case 'unassignYennengaDamage':
+        return unassignYennengaDamage(state, args.fighterId as string);
+      case 'confirmYennengaDamageSplit':
+        return confirmYennengaDamageSplit(state);
+      case 'resolveRainOfArrowsDefense':
+        return resolveRainOfArrowsDefense(state, (args.cardId as string) || null);
       default:
         return null;
     }
