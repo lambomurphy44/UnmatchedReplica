@@ -147,6 +147,10 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
       char0.id === 'sokka',
       char1.id === 'sokka',
     ],
+    zoneDamageTargetZone: '',
+    zoneDamageAmount: 0,
+    zoneDamagePlayerIndex: 0,
+    stallionChargeActive: false,
   };
 
   if (needsPlacement) {
@@ -200,7 +204,42 @@ export function isSpaceOccupied(state: GameState, spaceId: string, excludeFighte
 }
 
 export function getReachableSpaces(board: BoardMap, fromId: string, steps: number, fighters: Fighter[], movingFighterId: string): string[] {
-  const occupied = new Set(
+  // Can move THROUGH friendly fighters but not enemy fighters.
+  // Cannot END on any occupied space.
+  const movingFighter = fighters.find(f => f.id === movingFighterId);
+  const movingOwner = movingFighter?.owner;
+  const enemyOccupied = new Set(
+    fighters.filter(f => f.hp > 0 && f.id !== movingFighterId && f.spaceId && f.owner !== movingOwner).map(f => f.spaceId)
+  );
+  const friendlyOccupied = new Set(
+    fighters.filter(f => f.hp > 0 && f.id !== movingFighterId && f.spaceId && f.owner === movingOwner).map(f => f.spaceId)
+  );
+  const visited = new Set<string>([fromId]);
+  let frontier = [fromId];
+  for (let i = 0; i < steps; i++) {
+    const next: string[] = [];
+    for (const sid of frontier) {
+      const space = getSpace(board, sid);
+      if (!space) continue;
+      for (const adjId of space.adjacentIds) {
+        if (!visited.has(adjId) && !enemyOccupied.has(adjId)) {
+          visited.add(adjId);
+          // Can pass through friendlies but they still get added to visited for pathing
+          next.push(adjId);
+        }
+      }
+    }
+    frontier = next;
+  }
+  visited.delete(fromId);
+  // Remove spaces occupied by ANY fighter (can't end on them)
+  const allOccupied = new Set([...enemyOccupied, ...friendlyOccupied]);
+  return Array.from(visited).filter(sid => !allOccupied.has(sid));
+}
+
+/** Like getReachableSpaces but also allows moving through enemy fighters (Stallion Charge) */
+function getReachableSpacesThroughEnemies(board: BoardMap, fromId: string, steps: number, fighters: Fighter[], movingFighterId: string): string[] {
+  const allOccupied = new Set(
     fighters.filter(f => f.hp > 0 && f.id !== movingFighterId && f.spaceId).map(f => f.spaceId)
   );
   const visited = new Set<string>([fromId]);
@@ -211,7 +250,7 @@ export function getReachableSpaces(board: BoardMap, fromId: string, steps: numbe
       const space = getSpace(board, sid);
       if (!space) continue;
       for (const adjId of space.adjacentIds) {
-        if (!visited.has(adjId) && !occupied.has(adjId)) {
+        if (!visited.has(adjId)) {
           visited.add(adjId);
           next.push(adjId);
         }
@@ -220,7 +259,7 @@ export function getReachableSpaces(board: BoardMap, fromId: string, steps: numbe
     frontier = next;
   }
   visited.delete(fromId);
-  return Array.from(visited);
+  return Array.from(visited).filter(sid => !allOccupied.has(sid));
 }
 
 /** Find ALL shared adjacent spaces between two spaces (for Air Scooter). Returns space IDs. */
@@ -307,7 +346,7 @@ export function placeSidekick(state: GameState, spaceId: string): GameState {
 
   if (s.placementFighterIds.length === 0) {
     const otherPlayer = s.placementPlayer === 0 ? 1 : 0;
-    const otherUnplaced = s.fighters.filter(f => f.owner === otherPlayer && !f.isHero && f.spaceId === '');
+    const otherUnplaced = s.fighters.filter(f => f.owner === otherPlayer && !f.isHero && f.spaceId === '' && f.characterId !== 'mewtwo');
     if (otherUnplaced.length > 0) {
       s.placementPlayer = otherPlayer;
       s.placementFighterIds = otherUnplaced.map(f => f.id);
@@ -418,16 +457,7 @@ function checkStartOfTurnAbility(state: GameState) {
       }
     }
   }
-  if (charDef.id === 'sokka') {
-    const playerIdx = state.currentPlayer;
-    if (state.sokkaBoomerangReady[playerIdx]) {
-      const targets = getSokkaBoomerangTargets(state);
-      if (targets.length > 0) {
-        state.phase = 'sokka_boomerang';
-        addLog(state, `Sokka's Boomerang is READY. You may flip it to OUT to deal 1 damage to a fighter in Sokka's zone.`);
-      }
-    }
-  }
+  // Sokka's boomerang is used via a button during playing phase, not start of turn
 }
 
 function endTurn(state: GameState) {
@@ -551,6 +581,28 @@ export function skipSokkaBoomerang(state: GameState): GameState {
   return s;
 }
 
+/** Improvised Shield: player chooses to flip boomerang for value + cancel effects */
+export function resolveImprovisedShield(state: GameState): GameState {
+  const s = clone(state);
+  if (!s.combat) return s;
+  const defender = getFighter(s, s.combat.defenderId)!;
+  // Flip boomerang to OUT
+  s.sokkaBoomerangReady = [...s.sokkaBoomerangReady] as [boolean, boolean];
+  s.sokkaBoomerangReady[defender.owner] = false;
+  // Cancel attacker's effects
+  s.combat.attackerEffectsCancelled = true;
+  addLog(s, `Improvised Shield: Boomerang flipped to OUT! Value becomes 4, attacker's effects cancelled!`);
+  return continueAttackerDuringCombat(s);
+}
+
+/** Improvised Shield: player declines to flip boomerang */
+export function skipImprovisedShield(state: GameState): GameState {
+  const s = clone(state);
+  if (!s.combat) return s;
+  addLog(s, `Improvised Shield: Chose not to flip the Boomerang.`);
+  return continueAttackerDuringCombat(s);
+}
+
 // ---- Maneuver ----
 
 export function startManeuver(state: GameState): GameState {
@@ -608,12 +660,14 @@ export function executeManeuverMove(state: GameState, targetSpaceId: string): Ga
   const fighter = getFighter(s, fighterId);
   if (!fighter) return s;
 
-  const moveRange = fighter.moveValue + s.maneuverBoost;
+  const moveRange = s.pendingSchemeCard ? s.schemeMoveRange : fighter.moveValue + s.maneuverBoost;
   const reachable = getReachableSpaces(s.board, fighter.spaceId, moveRange, s.fighters, fighter.id);
-  if (reachable.includes(targetSpaceId)) {
-    fighter.spaceId = targetSpaceId;
-    addLog(s, `${fighter.name} moved to ${targetSpaceId}.`);
+  if (!reachable.includes(targetSpaceId)) {
+    // Invalid space — don't skip, just return unchanged
+    return s;
   }
+  fighter.spaceId = targetSpaceId;
+  addLog(s, `${fighter.name} moved to ${targetSpaceId}.`);
 
   return advanceManeuver(s, fighterId);
 }
@@ -1042,9 +1096,6 @@ function resolveCombat(state: GameState): GameState {
   // ===== PHASE 2: DURING COMBAT =====
   const defDuring = (!s.combat.defenderEffectsCancelled
     ? defCardDef?.effects.filter(e => e.timing === 'duringCombat') : []) || [];
-  const atkDuring = (!s.combat.attackerEffectsCancelled
-    ? atkCardDef?.effects.filter(e => e.timing === 'duringCombat') : []) || [];
-
   // Defender's DURING COMBAT
   for (const effect of defDuring) {
     if (effect.type === 'preventDamage') {
@@ -1068,16 +1119,31 @@ function resolveCombat(state: GameState): GameState {
         addLog(s, `${defCardDef?.name}: Boomerang is OUT — value becomes ${effect.amount}!`);
       }
     }
-    // Improvised Shield: flip boomerang to OUT, value becomes 4, cancel opponent effects
+    // Improvised Shield: optionally flip boomerang to OUT for value 4 + cancel effects
     if (effect.type === 'boomerangFlipForValueAndCancel') {
       if (s.sokkaBoomerangReady[defender.owner]) {
-        s.sokkaBoomerangReady = [...s.sokkaBoomerangReady] as [boolean, boolean];
-        s.sokkaBoomerangReady[defender.owner] = false;
-        s.combat!.attackerEffectsCancelled = true;
-        addLog(s, `${defCardDef?.name}: Boomerang flipped to OUT! Value becomes ${effect.amount}, opponent's effects cancelled!`);
+        // Pause for player choice
+        s.phase = 'sokka_improvised_shield';
+        addLog(s, `Improvised Shield: You may flip the Boomerang to OUT for value ${effect.amount} and cancel opponent's effects.`);
+        return s;
       }
     }
   }
+
+  // Continue to attacker's during-combat phase
+  return continueAttackerDuringCombat(s);
+}
+
+/** Process attacker's during-combat effects, then continue to damage resolution */
+function continueAttackerDuringCombat(s: GameState): GameState {
+  if (!s.combat) return s;
+
+  const attacker = getFighter(s, s.combat.attackerId)!;
+  const defender = getFighter(s, s.combat.defenderId)!;
+  const atkPlayer = s.players[attacker.owner];
+  const atkCharDef = getCharDef(atkPlayer.characterId);
+  const atkCardDef = s.combat.attackCard ? getCardDef(s.combat.attackCard, atkCharDef) : null;
+  const atkDuring = atkCardDef?.effects.filter(e => e.timing === 'duringCombat') || [];
 
   // Attacker's DURING COMBAT
   let atkHasDuringBoost = false;
@@ -1227,6 +1293,23 @@ function resolveCombatDamage(state: GameState): GameState {
           atkValue += effect.amount || 0;
         }
       }
+      // Jaws of the Beast: +1 per zone the opposing fighter is in
+      if (effect.timing === 'duringCombat' && effect.type === 'plusPerZone') {
+        const defSpace = getSpace(s.board, defender.spaceId);
+        if (defSpace) {
+          const zoneCount = defSpace.zones.length;
+          atkValue += zoneCount * (effect.amount || 1);
+          addLog(s, `Jaws of the Beast: +${zoneCount} (opponent in ${zoneCount} zone(s))!`);
+        }
+      }
+      // Divide and Conquer: if fighter not in hero's zone, value becomes 4
+      if (effect.timing === 'duringCombat' && effect.type === 'valueIfDifferentZone') {
+        const hero = getHero(s, attacker.owner);
+        if (hero && !sameZone(s.board, attacker.spaceId, hero.spaceId)) {
+          atkValue = (atkValue - (atkCardDef.value || 0)) + (effect.amount || 0);
+          addLog(s, `Divide and Conquer: Fighter not in hero's zone — value becomes ${effect.amount}!`);
+        }
+      }
     }
   }
   if (!s.combat.defenderEffectsCancelled && defCardDef) {
@@ -1253,6 +1336,21 @@ function resolveCombatDamage(state: GameState): GameState {
           defValue = (defValue - (defCardDef.value || 0)) + (effect.amount || 0);
         }
       }
+      if (effect.timing === 'duringCombat' && effect.type === 'plusPerZone') {
+        const atkSpace = getSpace(s.board, attacker.spaceId);
+        if (atkSpace) {
+          const zoneCount = atkSpace.zones.length;
+          defValue += zoneCount * (effect.amount || 1);
+          addLog(s, `Jaws of the Beast: +${zoneCount} (opponent in ${zoneCount} zone(s))!`);
+        }
+      }
+      if (effect.timing === 'duringCombat' && effect.type === 'valueIfDifferentZone') {
+        const hero = getHero(s, defender.owner);
+        if (hero && !sameZone(s.board, defender.spaceId, hero.spaceId)) {
+          defValue = (defValue - (defCardDef.value || 0)) + (effect.amount || 0);
+          addLog(s, `Divide and Conquer: Fighter not in hero's zone — value becomes ${effect.amount}!`);
+        }
+      }
     }
   }
 
@@ -1267,13 +1365,15 @@ function resolveCombatDamage(state: GameState): GameState {
         }
       }
       if (effect.timing === 'duringCombat' && effect.type === 'plusIfCloneAdjacent') {
-        const clones = s.fighters.filter(f =>
-          f.owner === attacker.owner && !f.isHero && f.characterId === 'mewtwo' && f.hp > 0 && f.spaceId !== ''
+        // Count OTHER friendly fighters adjacent to the opposing fighter
+        const adjFriendlies = s.fighters.filter(f =>
+          f.owner === attacker.owner && f.id !== attacker.id && f.hp > 0 && f.spaceId !== '' &&
+          areAdjacent(s.board, defender.spaceId, f.spaceId)
         );
-        const hasAdj = clones.some(c => areAdjacent(s.board, defender.spaceId, c.spaceId));
-        if (hasAdj) {
-          atkValue += effect.amount || 2;
-          addLog(s, `Swarm Tactics: +${effect.amount || 2} (Clone adjacent to opponent)!`);
+        if (adjFriendlies.length > 0) {
+          const bonus = adjFriendlies.length;
+          atkValue += bonus;
+          addLog(s, `Swarm Tactics: +${bonus} (${adjFriendlies.length} other friendly fighter(s) adjacent to opponent)!`);
         }
       }
     }
@@ -1694,11 +1794,28 @@ function processAfterCombatEffect(
     }
 
     case 'boomerangBounceDamage': {
-      // Boomerang Bounce: if boomerang OUT and opponent alive, deal 1 damage
+      // Boomerang Bounce: if boomerang OUT, deal 1 damage to a fighter in the opposing fighter's zone
       if (!state.sokkaBoomerangReady[selfPlayer.index] && opponent.hp > 0) {
-        opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
-        addLog(state, `Boomerang Bounce: Boomerang is OUT — deals ${effect.amount || 1} damage to ${opponent.name}! (${opponent.hp} HP)`);
-        checkHeroDeath(state);
+        // Find all enemy fighters in the opponent's zone
+        const opponentIdx = selfPlayer.index === 0 ? 1 : 0;
+        const enemiesInZone = getAliveFighters(state, opponentIdx).filter(f =>
+          sameZone(state.board, f.spaceId, opponent.spaceId)
+        );
+        if (enemiesInZone.length === 1) {
+          // Only one target — auto-deal
+          enemiesInZone[0].hp = Math.max(0, enemiesInZone[0].hp - (effect.amount || 1));
+          addLog(state, `Boomerang Bounce: Boomerang is OUT — deals ${effect.amount || 1} damage to ${enemiesInZone[0].name}! (${enemiesInZone[0].hp} HP)`);
+          checkHeroDeath(state);
+        } else if (enemiesInZone.length > 1) {
+          // Multiple targets — queue interactive selection
+          queue.push({
+            type: 'zoneDamageTarget',
+            playerIndex: selfPlayer.index,
+            damageAmount: effect.amount || 1,
+            fighterId: opponent.id, // reference fighter for zone
+            label: `Boomerang Bounce: Choose an enemy fighter in the opposing fighter's zone to deal ${effect.amount || 1} damage.`,
+          });
+        }
       }
       break;
     }
@@ -1719,6 +1836,83 @@ function processAfterCombatEffect(
         opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
         addLog(state, `Kyoshi Counter: Deals ${effect.amount || 1} damage to ${opponent.name}! (${opponent.hp} HP)`);
         checkHeroDeath(state);
+      }
+      break;
+    }
+
+    // ---- Yennenga after-combat effects ----
+
+    case 'moveHeroThroughEnemies': {
+      // Stallion Charge: move hero up to N spaces, can move through enemies
+      const hero = getHero(state, selfPlayer.index);
+      if (hero && hero.hp > 0 && effect.amount && effect.amount > 0) {
+        // Use special movement that allows passing through enemies
+        const reachable = getReachableSpacesThroughEnemies(state.board, hero.spaceId, effect.amount, state.fighters, hero.id);
+        if (reachable.length > 0) {
+          queue.push({
+            type: 'moveFighter',
+            playerIndex: selfPlayer.index,
+            fighterId: hero.id,
+            range: effect.amount,
+            label: `Stallion Charge: Move ${hero.name} up to ${effect.amount} spaces (through enemies).`,
+          });
+          // Store flag so resolveEffectMove uses through-enemies movement
+          state.stallionChargeActive = true;
+        }
+      }
+      break;
+    }
+
+    case 'dealDamageAfterCombat': {
+      // Point Blank: deal damage to opponent unconditionally after combat
+      if (opponent.hp > 0) {
+        // Check if opponent is adjacent to Yennenga (hero)
+        const hero = getHero(state, selfPlayer.index);
+        if (hero && areAdjacent(state.board, hero.spaceId, opponent.spaceId)) {
+          opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
+          addLog(state, `Point Blank: Deals ${effect.amount} damage to ${opponent.name}! (${opponent.hp} HP)`);
+          checkHeroDeath(state);
+        }
+      }
+      break;
+    }
+
+    case 'pushOpponent': {
+      // Pin the Prey: push opposing fighter up to N spaces
+      if (opponent.hp > 0 && effect.amount && effect.amount > 0) {
+        queue.push({
+          type: 'pushFighter',
+          playerIndex: selfPlayer.index,
+          targetFighterId: opponent.id,
+          range: effect.amount,
+          label: `Pin the Prey: Move ${opponent.name} up to ${effect.amount} spaces.`,
+        });
+      }
+      break;
+    }
+
+    case 'skirmishMove': {
+      // Skirmish: if won, choose EITHER fighter in combat to move
+      if (selfWon) {
+        // Queue a choice: move self or opponent
+        if (self.hp > 0) {
+          queue.push({
+            type: 'moveFighter',
+            playerIndex: selfPlayer.index,
+            fighterId: self.id,
+            range: effect.amount || 2,
+            label: `Skirmish: Move ${self.name} up to ${effect.amount || 2} spaces. (Skip to move ${opponent.name} instead, or skip both.)`,
+          });
+        }
+        if (opponent.hp > 0) {
+          queue.push({
+            type: 'moveFighter',
+            playerIndex: selfPlayer.index,
+            fighterId: opponent.id,
+            range: effect.amount || 2,
+            label: `Skirmish: Move ${opponent.name} up to ${effect.amount || 2} spaces.`,
+          });
+        }
       }
       break;
     }
@@ -1824,6 +2018,21 @@ function processNextEffect(state: GameState): GameState {
       // Continue to next queued effect (no phase change / user input needed)
       return processNextEffect(state);
     }
+
+    case 'zoneDamageTarget': {
+      // Boomerang Bounce: player chooses a target in the zone
+      const refFighter = effect.fighterId ? getFighter(state, effect.fighterId) : null;
+      if (refFighter) {
+        state.zoneDamageTargetZone = refFighter.spaceId;
+        state.zoneDamageAmount = effect.damageAmount || 1;
+        state.zoneDamagePlayerIndex = effect.playerIndex;
+        state.phase = 'effect_zoneDamageTarget';
+        addLog(state, effect.label);
+      } else {
+        return processNextEffect(state);
+      }
+      break;
+    }
   }
 
   return state;
@@ -1838,14 +2047,20 @@ export function resolveEffectMove(state: GameState, targetSpaceId: string): Game
   const fighter = getFighter(s, fighterId);
   if (!fighter) return continueEffectQueue(s);
 
-  const reachable = getReachableSpaces(s.board, fighter.spaceId, s.schemeMoveRange, s.fighters, fighter.id);
+  const reachable = s.stallionChargeActive
+    ? getReachableSpacesThroughEnemies(s.board, fighter.spaceId, s.schemeMoveRange, s.fighters, fighter.id)
+    : getReachableSpaces(s.board, fighter.spaceId, s.schemeMoveRange, s.fighters, fighter.id);
   if (reachable.includes(targetSpaceId)) {
     fighter.spaceId = targetSpaceId;
     addLog(s, `${fighter.name} moved to ${targetSpaceId}.`);
+  } else {
+    // Don't skip on invalid click — return unchanged state
+    return s;
   }
 
   s.schemeMoveFighterId = null;
   s.schemeMoveRange = 0;
+  s.stallionChargeActive = false;
   return continueEffectQueue(s);
 }
 
@@ -1936,6 +2151,28 @@ export function skipEffectPush(state: GameState): GameState {
   }
   s.pushTargetId = null;
   s.pushRange = 0;
+  return continueEffectQueue(s);
+}
+
+// ---- Zone Damage Target Selection (Boomerang Bounce) ----
+
+export function getZoneDamageTargets(state: GameState): Fighter[] {
+  const opponentIdx = state.zoneDamagePlayerIndex === 0 ? 1 : 0;
+  return getAliveFighters(state, opponentIdx).filter(f =>
+    sameZone(state.board, f.spaceId, state.zoneDamageTargetZone)
+  );
+}
+
+export function resolveZoneDamageTarget(state: GameState, targetFighterId: string): GameState {
+  const s = clone(state);
+  const targets = getZoneDamageTargets(s);
+  const target = targets.find(f => f.id === targetFighterId);
+  if (!target) return s; // invalid target, wait for valid input
+  target.hp = Math.max(0, target.hp - s.zoneDamageAmount);
+  addLog(s, `Boomerang Bounce: Deals ${s.zoneDamageAmount} damage to ${target.name}! (${target.hp} HP)`);
+  checkHeroDeath(s);
+  s.zoneDamageTargetZone = '';
+  s.zoneDamageAmount = 0;
   return continueEffectQueue(s);
 }
 
@@ -2212,6 +2449,41 @@ export function playScheme(state: GameState, cardId: string): GameState {
       break;
     }
 
+    // ---- Yennenga schemes ----
+    case 'yennenga_master_of_the_hunt': {
+      // Gain 2 actions (net +1 since playing scheme costs 1 action)
+      player.actionsRemaining += 2;
+      addLog(s, `Master of the Hunt: Gained 2 actions!`);
+      break;
+    }
+
+    case 'yennenga_one_with_the_land': {
+      // Move each fighter up to 2 spaces, each recovers 1 HP, draw 1 card
+      const ownFighters = getAliveFighters(s, s.currentPlayer);
+      // Heal all fighters 1 HP
+      for (const f of ownFighters) {
+        if (f.hp < f.maxHp) {
+          f.hp = Math.min(f.maxHp, f.hp + 1);
+        }
+      }
+      addLog(s, `One With the Land: All fighters recover 1 health.`);
+      // Draw 1 card
+      drawCards(s, s.currentPlayer, 1);
+      addLog(s, `One With the Land: Drew 1 card.`);
+      // Move each fighter up to 2 spaces
+      if (ownFighters.length > 0) {
+        s.pendingSchemeCard = card;
+        s.maneuverBoost = 0;
+        s.maneuverFightersToMove = ownFighters.map(f => f.id);
+        s.maneuverCurrentFighter = null;
+        s.schemeMoveRange = 2;
+        s.phase = 'scheme_moveAll';
+        addLog(s, `One With the Land: Move each of your fighters up to 2 spaces.`);
+        return s;
+      }
+      break;
+    }
+
     // ---- Sokka schemes ----
     case 'sokka_reel_it_back': {
       // If boomerang is OUT, flip to READY
@@ -2302,10 +2574,11 @@ export function executeSchemeMoveAllMove(state: GameState, targetSpaceId: string
   if (!fighter) return s;
 
   const reachable = getReachableSpaces(s.board, fighter.spaceId, s.schemeMoveRange, s.fighters, fighter.id);
-  if (reachable.includes(targetSpaceId)) {
-    fighter.spaceId = targetSpaceId;
-    addLog(s, `${fighter.name} moved to ${targetSpaceId}.`);
+  if (!reachable.includes(targetSpaceId)) {
+    return s; // Invalid space — don't skip, wait for valid input
   }
+  fighter.spaceId = targetSpaceId;
+  addLog(s, `${fighter.name} moved to ${targetSpaceId}.`);
 
   return advanceSchemeMoveAll(s, fighterId);
 }
@@ -2471,10 +2744,11 @@ export function resolveSchemeSidekickMove(state: GameState, targetSpaceId: strin
   if (!fighter) return s;
 
   const reachable = getReachableSpaces(s.board, fighter.spaceId, s.schemeMoveRange, s.fighters, fighter.id);
-  if (reachable.includes(targetSpaceId)) {
-    fighter.spaceId = targetSpaceId;
-    addLog(s, `${fighter.name} moved to ${targetSpaceId}.`);
+  if (!reachable.includes(targetSpaceId)) {
+    return s; // Invalid space — wait for valid input
   }
+  fighter.spaceId = targetSpaceId;
+  addLog(s, `${fighter.name} moved to ${targetSpaceId}.`);
 
   return cleanupSchemeMove(s);
 }
@@ -2527,6 +2801,9 @@ export function getEffectMoveSpaces(state: GameState): string[] {
   if (!fighterId) return [];
   const fighter = getFighter(state, fighterId);
   if (!fighter || !fighter.spaceId) return [];
+  if (state.stallionChargeActive) {
+    return getReachableSpacesThroughEnemies(state.board, fighter.spaceId, state.schemeMoveRange, state.fighters, fighter.id);
+  }
   return getReachableSpaces(state.board, fighter.spaceId, state.schemeMoveRange, state.fighters, fighter.id);
 }
 

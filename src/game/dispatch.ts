@@ -21,6 +21,8 @@ import {
   resolveTeleport, skipTeleport,
   resolveCloneRushDiscard,
   useSokkaBoomerang, skipSokkaBoomerang,
+  resolveImprovisedShield, skipImprovisedShield,
+  resolveZoneDamageTarget,
 } from './engine';
 
 /**
@@ -120,10 +122,18 @@ export function dispatchAction(state: GameState, actionType: string, args: Recor
       case 'resolveCloneRushDiscard':
         return resolveCloneRushDiscard(state, args.cardId as string);
       // Sokka actions
+      case 'enterBoomerangTargeting':
+        return { ...JSON.parse(JSON.stringify(state)), phase: 'sokka_boomerang' } as GameState;
       case 'useSokkaBoomerang':
         return useSokkaBoomerang(state, args.targetFighterId as string);
       case 'skipSokkaBoomerang':
         return skipSokkaBoomerang(state);
+      case 'resolveImprovisedShield':
+        return resolveImprovisedShield(state);
+      case 'skipImprovisedShield':
+        return skipImprovisedShield(state);
+      case 'resolveZoneDamageTarget':
+        return resolveZoneDamageTarget(state, args.targetFighterId as string);
       default:
         return null;
     }

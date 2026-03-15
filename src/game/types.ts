@@ -110,6 +110,7 @@ export type Phase =
   | 'effect_opponentDiscard'  // Post-combat: opponent discards a card
   | 'effect_placeFighter'     // Post-combat: place fighter on any unoccupied space
   | 'effect_pushFighter'      // Post-combat: push opposing fighter
+  | 'effect_zoneDamageTarget' // Boomerang Bounce: choose a target in a zone
   | 'effect_chooseSearch'     // Meditate: choose a card from deck to add to hand
   | 'scheme_selectCard'
   | 'scheme_selectTarget'
@@ -124,13 +125,13 @@ export type Phase =
   | 'mewtwo_cloneBatch_place' // Clone Batch: place up to 2 clones
   | 'mewtwo_teleport_move'    // Teleport: move Mewtwo up to 5 spaces (through fighters)
   | 'mewtwo_cloneRush_discard' // Clone Rush: choose a card from opponent's hand to discard
-  | 'sokka_boomerang'          // Sokka: choose to use boomerang (READY → OUT, deal 1 damage)
-  | 'sokka_boomerang_target'   // Sokka: choose target for boomerang damage
+  | 'sokka_boomerang'          // Sokka: choose target for boomerang damage
+  | 'sokka_improvised_shield'  // Sokka: choose whether to flip boomerang for Improvised Shield
   | 'discard_excess'
   | 'gameOver';
 
 export interface QueuedEffect {
-  type: 'moveFighter' | 'opponentDiscard' | 'placeFighter' | 'pushFighter' | 'zoneDamage';
+  type: 'moveFighter' | 'opponentDiscard' | 'placeFighter' | 'pushFighter' | 'zoneDamage' | 'zoneDamageTarget';
   playerIndex: number;
   damageAmount?: number;  // for zoneDamage: how much damage to deal
   fighterId?: string;
@@ -204,4 +205,12 @@ export interface GameState {
 
   // Sokka-specific
   sokkaBoomerangReady: [boolean, boolean]; // per player: is Boomerang READY? (true=READY, false=OUT)
+
+  // Zone damage target selection (Boomerang Bounce)
+  zoneDamageTargetZone: string;    // space ID whose zone contains valid targets
+  zoneDamageAmount: number;        // damage to deal
+  zoneDamagePlayerIndex: number;   // which player is choosing the target
+
+  // Yennenga-specific
+  stallionChargeActive: boolean; // Stallion Charge: allows movement through enemies
 }

@@ -7,6 +7,7 @@ import {
   getPushSpaces,
   getMedusaGazeTargets,
   getSokkaBoomerangTargets,
+  getZoneDamageTargets,
   getSchemeTargets,
   getReviveHarpySpaces,
   getValidPlacementSpaces,
@@ -165,7 +166,7 @@ export const Game: React.FC = () => {
     }
 
     // Defender phases: the opponent of the current player interacts
-    if (gs.phase === 'attack_defenderCard' || gs.phase === 'effect_opponentDiscard') {
+    if (gs.phase === 'attack_defenderCard' || gs.phase === 'effect_opponentDiscard' || gs.phase === 'sokka_improvised_shield') {
       return gs.currentPlayer !== myIndex; // defender = opponent of current player
     }
 
@@ -235,6 +236,14 @@ export const Game: React.FC = () => {
       const targetOnSpace = targets.find(t => t.spaceId === spaceId);
       if (targetOnSpace) {
         act('useSokkaBoomerang', { targetFighterId: targetOnSpace.id });
+      }
+      return;
+    }
+    if (gs.phase === 'effect_zoneDamageTarget') {
+      const targets = getZoneDamageTargets(gs);
+      const targetOnSpace = targets.find(t => t.spaceId === spaceId);
+      if (targetOnSpace) {
+        act('resolveZoneDamageTarget', { targetFighterId: targetOnSpace.id });
       }
       return;
     }
@@ -362,6 +371,9 @@ export const Game: React.FC = () => {
     }
     if (gs.phase === 'sokka_boomerang') {
       return getSokkaBoomerangTargets(gs).map(t => t.spaceId);
+    }
+    if (gs.phase === 'effect_zoneDamageTarget') {
+      return getZoneDamageTargets(gs).map(t => t.spaceId);
     }
     if (gs.phase === 'effect_moveFighter') {
       return getEffectMoveSpaces(gs);
@@ -783,21 +795,39 @@ export const Game: React.FC = () => {
       {canInteract && gs.phase === 'sokka_boomerang' && (
         <div className="phase-prompt">
           <div className="phase-text">
-            Boomerang! Click an enemy fighter in Sokka's zone to deal 1 damage (flips to OUT), or skip.
+            Boomerang! Click an enemy fighter in Sokka's zone to deal 1 damage (flips to OUT), or cancel.
           </div>
           <button className="skip-btn" onClick={() => act('skipSokkaBoomerang')}>
-            Keep Ready
+            Cancel
           </button>
         </div>
       )}
 
       {canInteract && gs.phase === 'playing' && (
-        <ActionBar
-          state={gs}
-          onManeuver={handleManeuver}
-          onStartAttack={handleStartAttack}
-          onStartScheme={handleStartScheme}
-        />
+        <>
+          <ActionBar
+            state={gs}
+            onManeuver={handleManeuver}
+            onStartAttack={handleStartAttack}
+            onStartScheme={handleStartScheme}
+          />
+          {gs.players[gs.currentPlayer].characterId === 'sokka' && gs.sokkaBoomerangReady[gs.currentPlayer] && (
+            <div style={{ textAlign: 'center', marginTop: '4px' }}>
+              <button
+                className="action-btn"
+                style={{ background: '#2e7d32', color: '#fff', fontWeight: 'bold', padding: '6px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer' }}
+                onClick={() => {
+                  const targets = getSokkaBoomerangTargets(gs);
+                  if (targets.length > 0) {
+                    act('enterBoomerangTargeting', {});
+                  }
+                }}
+              >
+                Use Boomerang!
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {canInteract && gs.phase === 'maneuver_boost' && (
@@ -889,6 +919,20 @@ export const Game: React.FC = () => {
           </div>
           <button className="skip-btn" onClick={() => act('selectArthurBoostCard', { cardId: null })}>
             Skip Boost
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'sokka_improvised_shield' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Improvised Shield: Flip Boomerang to OUT for value 4 and cancel attacker's effects?
+          </div>
+          <button className="action-btn" onClick={() => act('resolveImprovisedShield', {})}>
+            Flip Boomerang (value 4 + cancel)
+          </button>
+          <button className="skip-btn" onClick={() => act('skipImprovisedShield', {})}>
+            Keep Boomerang READY
           </button>
         </div>
       )}
@@ -999,6 +1043,14 @@ export const Game: React.FC = () => {
           </div>
         );
       })()}
+
+      {canInteract && gs.phase === 'effect_zoneDamageTarget' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Boomerang Bounce: Click an enemy fighter in the zone to deal {gs.zoneDamageAmount} damage.
+          </div>
+        </div>
+      )}
 
       {canInteract && gs.phase === 'effect_chooseSearch' && (
         <div className="phase-prompt">

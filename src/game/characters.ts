@@ -786,9 +786,9 @@ const mewtwoCards: CardDef[] = [
     restriction: 'any',
     quantity: 4,
     effects: [
-      { type: 'plusIfCloneAdjacent', timing: 'duringCombat', amount: 2 },
+      { type: 'plusIfCloneAdjacent', timing: 'duringCombat', amount: 1 },
     ],
-    effectText: 'DURING COMBAT: If a Clone is adjacent to the opposing fighter, this card gets +2.',
+    effectText: 'DURING COMBAT: For each other friendly fighter adjacent to the opposing fighter, increase the value of this card by +1.',
   },
 
   // ---- Sidekick (Clone only) ----
@@ -856,7 +856,7 @@ const yennengaCards: CardDef[] = [
     restriction: 'hero',
     quantity: 3,
     effects: [
-      { type: 'moveSelf', timing: 'afterCombat', amount: 5 },
+      { type: 'moveHeroThroughEnemies', timing: 'afterCombat', amount: 5 },
     ],
     effectText: 'AFTER COMBAT: Move Yennenga up to 5 spaces. She may move through opposing fighters.',
   },
@@ -886,7 +886,7 @@ const yennengaCards: CardDef[] = [
     effects: [
       { type: 'gainActionAndDraw', timing: 'immediately' },
     ],
-    effectText: 'IMMEDIATELY: You may return a defeated Archer to a space in the opposing fighter\'s zone. If you do, that Archer is now the attacker. If you don\'t, gain 1 action.',
+    effectText: 'IMMEDIATELY: Gain 1 action.',
   },
   {
     id: 'yennenga_shield_formation',
@@ -907,7 +907,9 @@ const yennengaCards: CardDef[] = [
     boost: 3,
     restriction: 'any',
     quantity: 3,
-    effects: [],
+    effects: [
+      { type: 'plusPerZone', timing: 'duringCombat', amount: 1 },
+    ],
     effectText: 'DURING COMBAT: For each zone the opposing fighter is in, increase the value of this card by +1.',
   },
   {
@@ -919,7 +921,7 @@ const yennengaCards: CardDef[] = [
     restriction: 'any',
     quantity: 3,
     effects: [
-      { type: 'dealDamageIfWon', timing: 'afterCombat', amount: 2 },
+      { type: 'dealDamageAfterCombat', timing: 'afterCombat', amount: 2 },
     ],
     effectText: 'AFTER COMBAT: If the opposing fighter is adjacent to Yennenga, deal 2 damage to that fighter.',
   },
@@ -944,7 +946,9 @@ const yennengaCards: CardDef[] = [
     boost: 1,
     restriction: 'any',
     quantity: 2,
-    effects: [],
+    effects: [
+      { type: 'valueIfDifferentZone', timing: 'duringCombat', amount: 4 },
+    ],
     effectText: 'DURING COMBAT: If your fighter is not in Yennenga\'s zone, the value of this card is 4 instead.',
   },
   {
@@ -956,6 +960,7 @@ const yennengaCards: CardDef[] = [
     restriction: 'any',
     quantity: 2,
     effects: [
+      { type: 'pushOpponent', timing: 'afterCombat', amount: 4 },
       { type: 'opponentDiscards', timing: 'afterCombat', amount: 1 },
     ],
     effectText: 'AFTER COMBAT: Move the opposing fighter up to 4 spaces. Your opponent discards 1 card.',
@@ -969,7 +974,7 @@ const yennengaCards: CardDef[] = [
     restriction: 'any',
     quantity: 2,
     effects: [
-      { type: 'moveFighterIfWon', timing: 'afterCombat', amount: 2 },
+      { type: 'skirmishMove', timing: 'afterCombat', amount: 2 },
     ],
     effectText: 'AFTER COMBAT: If you won the combat, choose one of the fighters in the combat and move them up to 2 spaces.',
   },
@@ -981,7 +986,9 @@ const yennengaCards: CardDef[] = [
     boost: 3,
     restriction: 'any',
     quantity: 2,
-    effects: [],
+    effects: [
+      { type: 'gainActions', timing: 'immediately', amount: 2 },
+    ],
     effectText: 'Gain 2 actions.',
   },
   {
@@ -1198,7 +1205,7 @@ const sokkaCards: CardDef[] = [
     restriction: 'any',
     quantity: 2,
     effects: [
-      { type: 'moveFighterIfWon', timing: 'afterCombat', amount: 2 },
+      { type: 'skirmishMove', timing: 'afterCombat', amount: 2 },
     ],
     effectText: 'AFTER COMBAT: If you won the combat, choose one of the fighters in the combat and move them up to 2 spaces.',
   },
