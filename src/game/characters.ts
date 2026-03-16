@@ -1250,13 +1250,25 @@ export const SOKKA: CharacterDef = {
 // =============================================
 
 const teslaCards: CardDef[] = [
-  // ---- Hero (Tesla only — all cards are hero-only since no sidekick) ----
+  {
+    id: 'tesla_7_hertz',
+    name: '7 Hertz',
+    type: 'attack',
+    value: 4,
+    boost: 3,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'teslaCoilGainActions', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: You may discharge coils: 1 coil — Gain 1 action. 2 coils — Gain 2 actions.',
+  },
   {
     id: 'tesla_death_ray',
     name: 'Death Ray',
     type: 'attack',
     value: 3,
-    boost: 2,
+    boost: 4,
     restriction: 'any',
     quantity: 3,
     effects: [
@@ -1269,7 +1281,7 @@ const teslaCards: CardDef[] = [
     name: 'Polyphase Coils',
     type: 'versatile',
     value: 3,
-    boost: 2,
+    boost: 1,
     restriction: 'any',
     quantity: 3,
     effects: [
@@ -1282,7 +1294,7 @@ const teslaCards: CardDef[] = [
     name: 'Lightning Storm',
     type: 'versatile',
     value: 3,
-    boost: 2,
+    boost: 1,
     restriction: 'any',
     quantity: 3,
     effects: [
@@ -1295,13 +1307,26 @@ const teslaCards: CardDef[] = [
     name: 'X-Ray Radiation',
     type: 'versatile',
     value: 4,
-    boost: 2,
+    boost: 1,
     restriction: 'any',
     quantity: 3,
     effects: [
       { type: 'teslaCoilRevealDiscard', timing: 'duringCombat' },
     ],
     effectText: 'DURING COMBAT: Reveal the top card of your opponent\'s deck. You may discharge coils: 1 coil — discard that card. 2 coils — also add its BOOST value to this card\'s value.',
+  },
+  {
+    id: 'tesla_intense_experimentation',
+    name: 'Intense Experimentation',
+    type: 'defense',
+    value: 3,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'teslaCoilDraw', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: Draw 1 card. You may discharge coils: 1 coil — instead, draw 2 cards. 2 coils — instead, draw 2 cards and Tesla recovers 1 health.',
   },
   {
     id: 'tesla_repulsion_blast',
@@ -1336,24 +1361,11 @@ const teslaCards: CardDef[] = [
     value: 5,
     boost: 3,
     restriction: 'any',
-    quantity: 3,
+    quantity: 2,
     effects: [
       { type: 'teslaAlternatingCurrent', timing: 'afterCombat' },
     ],
     effectText: 'AFTER COMBAT: Choose one — charge both coils, or discharge both coils to have Tesla recover 2 health.',
-  },
-  {
-    id: 'tesla_intense_experimentation',
-    name: 'Intense Experimentation',
-    type: 'defense',
-    value: 3,
-    boost: 2,
-    restriction: 'any',
-    quantity: 3,
-    effects: [
-      { type: 'teslaCoilDraw', timing: 'afterCombat' },
-    ],
-    effectText: 'AFTER COMBAT: Draw 1 card. You may discharge coils: 1 coil — instead, draw 2 cards. 2 coils — instead, draw 3 cards and Tesla recovers 1 health.',
   },
   {
     id: 'tesla_remote_control',
@@ -1362,7 +1374,7 @@ const teslaCards: CardDef[] = [
     value: 0,
     boost: 3,
     restriction: 'any',
-    quantity: 3,
+    quantity: 2,
     effects: [
       { type: 'gainActions', timing: 'immediately', amount: 1 },
     ],
@@ -1373,9 +1385,9 @@ const teslaCards: CardDef[] = [
     name: 'Fully Charged',
     type: 'scheme',
     value: 0,
-    boost: 2,
+    boost: 1,
     restriction: 'any',
-    quantity: 3,
+    quantity: 2,
     effects: [
       { type: 'teslaFullyCharged', timing: 'immediately' },
     ],

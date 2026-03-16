@@ -2573,6 +2573,21 @@ function processAfterCombatEffect(
 
     // ---- Tesla after-combat effects ----
 
+    case 'teslaCoilGainActions': {
+      // 7 Hertz: discharge coils to gain actions
+      const coils = state.teslaCoilsCharged[selfPlayer.index];
+      if (coils >= 2) {
+        teslaDischargeCoils(state, selfPlayer.index, 2);
+        selfPlayer.actionsRemaining += 2;
+        addLog(state, `7 Hertz (2 coils): Gained 2 actions!`);
+      } else if (coils >= 1) {
+        teslaDischargeCoils(state, selfPlayer.index, 1);
+        selfPlayer.actionsRemaining += 1;
+        addLog(state, `7 Hertz (1 coil): Gained 1 action!`);
+      }
+      break;
+    }
+
     case 'teslaCoilZoneDamage': {
       // Lightning Storm: discharge coils for zone damage
       const coils = state.teslaCoilsCharged[selfPlayer.index];
