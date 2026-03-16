@@ -131,6 +131,12 @@ export type Phase =
   | 'sokka_precision_throw'    // Sokka: choose whether to flip boomerang for Precision Throw
   | 'yennenga_damage_split'    // Yennenga: split incoming damage among fighters in zone
   | 'rain_of_arrows_followup'  // Yennenga: second attack from Rain of Arrows
+  | 'tesla_startAbility'       // Tesla: Electrical Overflow — choose targets for coil damage
+  | 'tesla_coilChoice'         // Tesla: choose how many coils to discharge for a card effect
+  | 'tesla_repulsion_move'     // Tesla: move opponent fighter for Repulsion Blast
+  | 'tesla_repulsion_selfMove' // Tesla: move Tesla for Repulsion Blast (1 coil)
+  | 'tesla_alternating_choice' // Tesla: choose charge or discharge for Alternating Current
+  | 'tesla_remote_control'     // Tesla: move opposing fighters for Remote Control
   | 'discard_excess'
   | 'gameOver';
 
@@ -156,6 +162,7 @@ export interface CombatState {
   damageDealt: number;
   attackerWon: boolean;
   airScooterUsed: boolean;        // Aang: attacked from 1 space away via Air Scooter
+  teslaIgnoreOpponentValue: boolean; // Polyphase Coils: 2 coils — ignore opponent's card value
 }
 
 export interface GameState {
@@ -224,6 +231,12 @@ export interface GameState {
     defenderId: string;
     value: number;
   } | null;
+
+  // Tesla-specific
+  teslaCoilsCharged: [number, number]; // per player: 0-2 coils charged
+  teslaPendingCoilEffect: string | null; // card effect type awaiting coil discharge choice
+  teslaPendingCoilCardDefId: string | null; // the card that triggered the coil choice
+  teslaCoilRevealedCard: { defId: string; boost: number } | null; // X-Ray Radiation revealed card
 
   // Yennenga damage splitting
   yennengaDamageSplit: {

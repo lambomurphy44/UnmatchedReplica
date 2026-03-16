@@ -1245,4 +1245,156 @@ export const SOKKA: CharacterDef = {
   },
 };
 
-export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA, AANG, MEWTWO, YENNENGA, SOKKA];
+// =============================================
+// NIKOLA TESLA — 30 cards (no sidekick)
+// =============================================
+
+const teslaCards: CardDef[] = [
+  // ---- Hero (Tesla only — all cards are hero-only since no sidekick) ----
+  {
+    id: 'tesla_death_ray',
+    name: 'Death Ray',
+    type: 'attack',
+    value: 3,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'teslaCoilValue', timing: 'duringCombat', amount: 5, param: '7' },
+    ],
+    effectText: 'DURING COMBAT: You may discharge coils: 1 coil — this card\'s value is 5. 2 coils — this card\'s value is 7.',
+  },
+  {
+    id: 'tesla_polyphase_coils',
+    name: 'Polyphase Coils',
+    type: 'versatile',
+    value: 3,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'teslaCoilCancel', timing: 'immediately' },
+    ],
+    effectText: 'IMMEDIATELY: You may discharge coils: 1 coil — cancel all effects on your opponent\'s card. 2 coils — also ignore that card\'s value.',
+  },
+  {
+    id: 'tesla_lightning_storm',
+    name: 'Lightning Storm',
+    type: 'versatile',
+    value: 3,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'teslaCoilZoneDamage', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: You may discharge coils: 1 coil — deal 1 damage to each opposing fighter in your zone. 2 coils — instead, deal 2 damage.',
+  },
+  {
+    id: 'tesla_xray_radiation',
+    name: 'X-Ray Radiation',
+    type: 'versatile',
+    value: 4,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'teslaCoilRevealDiscard', timing: 'duringCombat' },
+    ],
+    effectText: 'DURING COMBAT: Reveal the top card of your opponent\'s deck. You may discharge coils: 1 coil — discard that card. 2 coils — also add its BOOST value to this card\'s value.',
+  },
+  {
+    id: 'tesla_repulsion_blast',
+    name: 'Repulsion Blast',
+    type: 'versatile',
+    value: 2,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'teslaCoilRepulsion', timing: 'afterCombat', amount: 2 },
+    ],
+    effectText: 'AFTER COMBAT: Move the opposing fighter up to 2 spaces. You may discharge coils: 1 coil — also move Tesla up to 2 spaces. 2 coils — also your opponent discards 1 random card.',
+  },
+  {
+    id: 'tesla_kinetic_induction',
+    name: 'Kinetic Induction',
+    type: 'versatile',
+    value: 2,
+    boost: 1,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'teslaChargeCoils', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: Charge 1 coil. If you won the combat, charge both coils instead.',
+  },
+  {
+    id: 'tesla_alternating_current',
+    name: 'The Alternating Current',
+    type: 'attack',
+    value: 5,
+    boost: 3,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'teslaAlternatingCurrent', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: Choose one — charge both coils, or discharge both coils to have Tesla recover 2 health.',
+  },
+  {
+    id: 'tesla_intense_experimentation',
+    name: 'Intense Experimentation',
+    type: 'defense',
+    value: 3,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'teslaCoilDraw', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: Draw 1 card. You may discharge coils: 1 coil — instead, draw 2 cards. 2 coils — instead, draw 3 cards and Tesla recovers 1 health.',
+  },
+  {
+    id: 'tesla_remote_control',
+    name: 'Remote Control',
+    type: 'scheme',
+    value: 0,
+    boost: 3,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'gainActions', timing: 'immediately', amount: 1 },
+    ],
+    effectText: 'Move all opposing fighters up to 2 spaces. Gain 1 action.',
+  },
+  {
+    id: 'tesla_fully_charged',
+    name: 'Fully Charged',
+    type: 'scheme',
+    value: 0,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'teslaFullyCharged', timing: 'immediately' },
+    ],
+    effectText: 'Charge both coils. Gain 1 action.',
+  },
+];
+
+export const TESLA: CharacterDef = {
+  id: 'tesla',
+  name: 'Nikola Tesla',
+  hp: 14,
+  isRanged: true,
+  moveValue: 2,
+  deckCards: teslaCards,
+  ability: {
+    name: 'Electrical Overflow',
+    description: 'Start the game with 1 coil charged. At the end of your turn, charge 1 coil. At the start of your turn, if both coils are charged, deal 1 damage to each opposing fighter adjacent to Tesla and move them up to 1 space.',
+    timing: 'startOfTurn',
+  },
+};
+
+export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA, AANG, MEWTWO, YENNENGA, SOKKA, TESLA];

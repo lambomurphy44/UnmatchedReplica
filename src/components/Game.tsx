@@ -7,6 +7,7 @@ import {
   getPushSpaces,
   getMedusaGazeTargets,
   getSokkaBoomerangTargets,
+  getTeslaOverflowTargets,
   getZoneDamageTargets,
   getSchemeTargets,
   getReviveHarpySpaces,
@@ -247,6 +248,20 @@ export const Game: React.FC = () => {
       }
       return;
     }
+    if (gs.phase === 'tesla_remote_control') {
+      if (gs.maneuverCurrentFighter) {
+        act('executeSchemeMoveAllMove', { spaceId });
+      } else {
+        // Select fighter by clicking their space
+        const opponentIndex = gs.currentPlayer === 0 ? 1 : 0;
+        const fighters = gs.fighters.filter(f => f.owner === opponentIndex && f.hp > 0 && gs.maneuverFightersToMove.includes(f.id));
+        const targetOnSpace = fighters.find(f => f.spaceId === spaceId);
+        if (targetOnSpace) {
+          act('selectSchemeMoveAllFighter', { fighterId: targetOnSpace.id });
+        }
+      }
+      return;
+    }
     if (gs.phase === 'effect_zoneDamageTarget') {
       const targets = getZoneDamageTargets(gs);
       const targetOnSpace = targets.find(t => t.spaceId === spaceId);
@@ -387,6 +402,21 @@ export const Game: React.FC = () => {
     }
     if (gs.phase === 'sokka_boomerang') {
       return getSokkaBoomerangTargets(gs).map(t => t.spaceId);
+    }
+    if (gs.phase === 'tesla_startAbility') {
+      return getTeslaOverflowTargets(gs).map(t => t.spaceId);
+    }
+    if (gs.phase === 'tesla_remote_control' && gs.maneuverCurrentFighter) {
+      const f = getFighter(gs, gs.maneuverCurrentFighter);
+      if (f) {
+        return getReachableSpaces(gs.board, f.spaceId, gs.schemeMoveRange, gs.fighters, f.id);
+      }
+    }
+    if (gs.phase === 'tesla_remote_control' && !gs.maneuverCurrentFighter) {
+      return gs.maneuverFightersToMove.map(id => {
+        const f = getFighter(gs, id);
+        return f ? f.spaceId : '';
+      }).filter(Boolean);
     }
     if (gs.phase === 'effect_zoneDamageTarget') {
       return getZoneDamageTargets(gs).map(t => t.spaceId);
@@ -810,6 +840,42 @@ export const Game: React.FC = () => {
           </div>
           <button className="skip-btn" onClick={() => act('skipSokkaBoomerang')}>
             Cancel
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'tesla_startAbility' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Electrical Overflow: Both coils charged! Deal 1 damage to adjacent enemies and push them 1 space.
+          </div>
+          <button className="skip-btn" onClick={() => act('useTeslaOverflow')}>
+            Activate
+          </button>
+          <button className="skip-btn" onClick={() => act('skipTeslaOverflow')}>
+            Skip
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'tesla_remote_control' && !gs.maneuverCurrentFighter && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Remote Control: Select an opposing fighter to move (up to 2 spaces), or skip all.
+          </div>
+          <button className="skip-btn" onClick={() => act('skipAllSchemeMoveAll')}>
+            Skip All
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'tesla_remote_control' && gs.maneuverCurrentFighter && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Move {getFighter(gs, gs.maneuverCurrentFighter)?.name} up to {gs.schemeMoveRange} spaces.
+          </div>
+          <button className="skip-btn" onClick={() => act('skipSchemeMoveAllFighter')}>
+            Skip Move
           </button>
         </div>
       )}

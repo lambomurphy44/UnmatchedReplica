@@ -18,6 +18,7 @@ import archer1Portrait from '../assets/Archer 1.png';
 import archer2Portrait from '../assets/Archer 2.png';
 import sokkaPortrait from '../assets/Sokka.png';
 import sukiPortrait from '../assets/Suki.png';
+import teslaPortrait from '../assets/Tesla.svg';
 
 
 interface BoardProps {
@@ -65,6 +66,9 @@ function getPortrait(f: Fighter): string {
   }
   if (f.characterId === 'sokka') {
     return f.isHero ? sokkaPortrait : sukiPortrait;
+  }
+  if (f.characterId === 'tesla') {
+    return teslaPortrait;
   }
 
   if (f.isHero) return medusaPortrait;

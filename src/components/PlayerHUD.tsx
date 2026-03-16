@@ -82,6 +82,20 @@ export const PlayerHUD: React.FC<PlayerHUDProps> = ({ state, playerIndex, isActi
           Boomerang: {state.sokkaBoomerangReady[playerIndex] ? 'READY' : 'OUT'}
         </div>
       )}
+      {player.characterId === 'tesla' && (
+        <div style={{
+          padding: '4px 8px',
+          margin: '4px 0',
+          borderRadius: '4px',
+          background: state.teslaCoilsCharged[playerIndex] >= 2 ? '#e65100' : state.teslaCoilsCharged[playerIndex] >= 1 ? '#f9a825' : '#424242',
+          color: '#fff',
+          fontWeight: 'bold',
+          fontSize: '0.85em',
+          textAlign: 'center',
+        }}>
+          Coils: {state.teslaCoilsCharged[playerIndex]}/2 {state.teslaCoilsCharged[playerIndex] >= 2 ? 'FULLY CHARGED' : state.teslaCoilsCharged[playerIndex] >= 1 ? 'CHARGED' : 'EMPTY'}
+        </div>
+      )}
       <div className="hud-stats">
         <span>Hand: {player.hand.length}</span>
         <span>Deck: {player.deck.length}</span>
