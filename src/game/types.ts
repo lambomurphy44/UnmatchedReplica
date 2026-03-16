@@ -131,7 +131,8 @@ export type Phase =
   | 'sokka_precision_throw'    // Sokka: choose whether to flip boomerang for Precision Throw
   | 'yennenga_damage_split'    // Yennenga: split incoming damage among fighters in zone
   | 'rain_of_arrows_followup'  // Yennenga: second attack from Rain of Arrows
-  | 'tesla_startAbility'       // Tesla: Electrical Overflow — choose targets for coil damage
+  | 'tesla_startAbility'       // Tesla: Electrical Overflow — mandatory damage, then interactive push
+  | 'tesla_overflow_push'      // Tesla: push each adjacent enemy up to 1 space after overflow damage
   | 'tesla_coilChoice'         // Tesla: choose how many coils to discharge for a card effect
   | 'tesla_repulsion_move'     // Tesla: move opponent fighter for Repulsion Blast
   | 'tesla_repulsion_selfMove' // Tesla: move Tesla for Repulsion Blast (1 coil)
@@ -141,13 +142,14 @@ export type Phase =
   | 'gameOver';
 
 export interface QueuedEffect {
-  type: 'moveFighter' | 'opponentDiscard' | 'placeFighter' | 'pushFighter' | 'zoneDamage' | 'zoneDamageTarget';
+  type: 'moveFighter' | 'opponentDiscard' | 'placeFighter' | 'pushFighter' | 'zoneDamage' | 'zoneDamageTarget' | 'teslaCoilChoice' | 'teslaAlternatingChoice';
   playerIndex: number;
   damageAmount?: number;  // for zoneDamage: how much damage to deal
   fighterId?: string;
   targetFighterId?: string;  // for push: the fighter being pushed
   range?: number;
   label: string;
+  teslaEffectType?: string; // for teslaCoilChoice: which effect is pending
 }
 
 export interface CombatState {
@@ -163,6 +165,10 @@ export interface CombatState {
   attackerWon: boolean;
   airScooterUsed: boolean;        // Aang: attacked from 1 space away via Air Scooter
   teslaIgnoreOpponentValue: boolean; // Polyphase Coils: 2 coils — ignore opponent's card value
+  teslaAtkValueDelta: number; // value adjustment from Tesla coil effects on attacker side
+  teslaDefValueDelta: number; // value adjustment from Tesla coil effects on defender side
+  teslaAtkValueReplace: number | null; // Death Ray: replace attacker's card value entirely
+  teslaDefValueReplace: number | null; // Death Ray: replace defender's card value entirely
 }
 
 export interface GameState {
@@ -237,6 +243,8 @@ export interface GameState {
   teslaPendingCoilEffect: string | null; // card effect type awaiting coil discharge choice
   teslaPendingCoilCardDefId: string | null; // the card that triggered the coil choice
   teslaCoilRevealedCard: { defId: string; boost: number } | null; // X-Ray Radiation revealed card
+  teslaCoilChoiceContext: 'immediately' | 'duringCombat_atk' | 'duringCombat_def' | 'afterCombat' | null;
+  teslaOverflowPushTargets: string[]; // fighter IDs to push during overflow
 
   // Yennenga damage splitting
   yennengaDamageSplit: {

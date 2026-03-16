@@ -27,7 +27,8 @@ import {
   resolveZoneDamageTarget,
   assignYennengaDamage, unassignYennengaDamage, confirmYennengaDamageSplit,
   resolveRainOfArrowsDefense,
-  useTeslaOverflow, skipTeslaOverflow,
+  resolveTeslaCoilChoice, resolveTeslaAlternatingChoice,
+  resolveTeslaOverflowPush, skipTeslaOverflowPush,
 } from './engine';
 
 /**
@@ -157,10 +158,14 @@ export function dispatchAction(state: GameState, actionType: string, args: Recor
       case 'resolveRainOfArrowsDefense':
         return resolveRainOfArrowsDefense(state, (args.cardId as string) || null);
       // Tesla actions
-      case 'useTeslaOverflow':
-        return useTeslaOverflow(state);
-      case 'skipTeslaOverflow':
-        return skipTeslaOverflow(state);
+      case 'resolveTeslaCoilChoice':
+        return resolveTeslaCoilChoice(state, args.coilCount as number);
+      case 'resolveTeslaAlternatingChoice':
+        return resolveTeslaAlternatingChoice(state, args.choice as string);
+      case 'resolveTeslaOverflowPush':
+        return resolveTeslaOverflowPush(state, args.spaceId as string);
+      case 'skipTeslaOverflowPush':
+        return skipTeslaOverflowPush(state);
       default:
         return null;
     }

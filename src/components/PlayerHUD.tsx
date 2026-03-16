@@ -57,7 +57,7 @@ export const PlayerHUD: React.FC<PlayerHUDProps> = ({ state, playerIndex, isActi
           <div key={f.id} className={`hud-fighter ${f.hp <= 0 ? 'dead' : ''}`}>
             <span>{f.isHero ? '★' : '●'} {f.name}</span>
             <span className="hud-hp">
-              {f.hp > 0 ? `${f.hp}/${f.maxHp} HP` : 'DEFEATED'}
+              {f.hp <= 0 ? 'DEFEATED' : f.spaceId === '' ? 'NOT PLACED' : `${f.hp}/${f.maxHp} HP`}
             </span>
           </div>
         ))}

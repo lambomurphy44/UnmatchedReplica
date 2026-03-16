@@ -7,7 +7,6 @@ import {
   getPushSpaces,
   getMedusaGazeTargets,
   getSokkaBoomerangTargets,
-  getTeslaOverflowTargets,
   getZoneDamageTargets,
   getSchemeTargets,
   getReviveHarpySpaces,
@@ -179,6 +178,14 @@ export const Game: React.FC = () => {
       return gs.currentPlayer === myIndex;
     }
 
+    // Tesla coil choice: the Tesla player controls (may be defender)
+    if (gs.phase === 'tesla_coilChoice' && gs.combat) {
+      const atk = getFighter(gs, gs.combat.attackerId);
+      const def = getFighter(gs, gs.combat.defenderId);
+      if (atk?.characterId === 'tesla') return atk.owner === myIndex;
+      if (def?.characterId === 'tesla') return def.owner === myIndex;
+    }
+
     // All other phases: the current player interacts
     return gs.currentPlayer === myIndex;
   })();
@@ -294,6 +301,10 @@ export const Game: React.FC = () => {
       act('resolveCombatImmediatelyPush', { spaceId });
       return;
     }
+    if (gs.phase === 'tesla_overflow_push') {
+      act('resolveTeslaOverflowPush', { spaceId });
+      return;
+    }
     // Mewtwo phases
     if (gs.phase === 'mewtwo_placeClone' || gs.phase === 'mewtwo_cloneBatch_place') {
       act('placeClone', { spaceId });
@@ -403,8 +414,8 @@ export const Game: React.FC = () => {
     if (gs.phase === 'sokka_boomerang') {
       return getSokkaBoomerangTargets(gs).map(t => t.spaceId);
     }
-    if (gs.phase === 'tesla_startAbility') {
-      return getTeslaOverflowTargets(gs).map(t => t.spaceId);
+    if (gs.phase === 'tesla_overflow_push' && gs.pushTargetId) {
+      return getPushSpaces(gs, gs.pushTargetId, gs.pushRange);
     }
     if (gs.phase === 'tesla_remote_control' && gs.maneuverCurrentFighter) {
       const f = getFighter(gs, gs.maneuverCurrentFighter);
@@ -844,19 +855,80 @@ export const Game: React.FC = () => {
         </div>
       )}
 
-      {canInteract && gs.phase === 'tesla_startAbility' && (
-        <div className="phase-prompt">
-          <div className="phase-text">
-            Electrical Overflow: Both coils charged! Deal 1 damage to adjacent enemies and push them 1 space.
+      {canInteract && gs.phase === 'tesla_overflow_push' && (() => {
+        const f = gs.pushTargetId ? getFighter(gs, gs.pushTargetId) : null;
+        return (
+          <div className="phase-prompt">
+            <div className="phase-text">
+              Electrical Overflow: Move {f?.name} up to 1 space — click a highlighted space, or skip.
+            </div>
+            <button className="skip-btn" onClick={() => act('skipTeslaOverflowPush')}>
+              Skip (don't move)
+            </button>
           </div>
-          <button className="skip-btn" onClick={() => act('useTeslaOverflow')}>
-            Activate
-          </button>
-          <button className="skip-btn" onClick={() => act('skipTeslaOverflow')}>
-            Skip
-          </button>
-        </div>
-      )}
+        );
+      })()}
+
+      {canInteract && gs.phase === 'tesla_coilChoice' && (() => {
+        // Find the Tesla player index
+        let teslaPlayerIdx = gs.currentPlayer;
+        if (gs.combat) {
+          const atk = getFighter(gs, gs.combat.attackerId);
+          const def = getFighter(gs, gs.combat.defenderId);
+          if (atk?.characterId === 'tesla') teslaPlayerIdx = atk.owner;
+          else if (def?.characterId === 'tesla') teslaPlayerIdx = def.owner;
+        }
+        const coils = gs.teslaCoilsCharged[teslaPlayerIdx];
+        const effectType = gs.teslaPendingCoilEffect;
+        let effectName = 'Tesla Effect';
+        if (effectType === 'teslaCoilCancel') effectName = 'Polyphase Coils';
+        else if (effectType === 'teslaCoilValue') effectName = 'Death Ray';
+        else if (effectType === 'teslaCoilRevealDiscard') effectName = 'X-Ray Radiation';
+        else if (effectType === 'teslaCoilGainActions') effectName = '7 Hertz';
+        else if (effectType === 'teslaCoilZoneDamage') effectName = 'Lightning Storm';
+        else if (effectType === 'teslaCoilRepulsion') effectName = 'Repulsion Blast';
+        else if (effectType === 'teslaCoilDraw') effectName = 'Intense Experimentation';
+
+        return (
+          <div className="phase-prompt">
+            <div className="phase-text">
+              {effectName}: Choose how many coils to discharge ({coils} available).
+            </div>
+            <button className="skip-btn" onClick={() => act('resolveTeslaCoilChoice', { coilCount: 0 })}>
+              Skip (0 coils)
+            </button>
+            {coils >= 1 && (
+              <button className="action-btn" onClick={() => act('resolveTeslaCoilChoice', { coilCount: 1 })}>
+                Discharge 1 Coil
+              </button>
+            )}
+            {coils >= 2 && (
+              <button className="action-btn" onClick={() => act('resolveTeslaCoilChoice', { coilCount: 2 })}>
+                Discharge 2 Coils
+              </button>
+            )}
+          </div>
+        );
+      })()}
+
+      {canInteract && gs.phase === 'tesla_alternating_choice' && (() => {
+        const coils = gs.teslaCoilsCharged[gs.currentPlayer];
+        return (
+          <div className="phase-prompt">
+            <div className="phase-text">
+              The Alternating Current: Choose one.
+            </div>
+            <button className="action-btn" onClick={() => act('resolveTeslaAlternatingChoice', { choice: 'charge' })}>
+              Charge Both Coils
+            </button>
+            {coils >= 2 && (
+              <button className="action-btn" onClick={() => act('resolveTeslaAlternatingChoice', { choice: 'heal' })}>
+                Discharge Both to Heal 2
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {canInteract && gs.phase === 'tesla_remote_control' && !gs.maneuverCurrentFighter && (
         <div className="phase-prompt">

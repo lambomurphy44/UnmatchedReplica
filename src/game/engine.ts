@@ -160,6 +160,8 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
     teslaPendingCoilEffect: null,
     teslaPendingCoilCardDefId: null,
     teslaCoilRevealedCard: null,
+    teslaCoilChoiceContext: null,
+    teslaOverflowPushTargets: [],
   };
 
   if (needsPlacement) {
@@ -461,12 +463,12 @@ function checkStartOfTurnAbility(state: GameState) {
         const adjacentSpaces = getMewtwoAdjacentSpaces(state, playerIdx);
         if (adjacentSpaces.length > 0) {
           state.phase = 'mewtwo_cloneVats';
-          addLog(state, `Clone Vats: You may discard 1 card to place a Clone adjacent to Mewtwo.`);
+          addLog(state, `Clone Vats: You may discard cards to place Clones adjacent to Mewtwo.`);
         }
       }
     }
   }
-  // Tesla: Electrical Overflow — if both coils charged, deal 1 damage to adjacent opposing fighters
+  // Tesla: Electrical Overflow — if both coils charged, MUST deal 1 damage to adjacent opposing fighters
   if (charDef.id === 'tesla') {
     const pi = state.currentPlayer;
     if (state.teslaCoilsCharged[pi] >= 2) {
@@ -477,8 +479,24 @@ function checkStartOfTurnAbility(state: GameState) {
           areAdjacent(state.board, hero.spaceId, f.spaceId)
         );
         if (adjacentEnemies.length > 0) {
-          state.phase = 'tesla_startAbility';
-          addLog(state, `Electrical Overflow: Both coils charged! Deal 1 damage to each adjacent opposing fighter and push them 1 space.`);
+          addLog(state, `Electrical Overflow: Both coils charged! Dealing 1 damage to each adjacent opposing fighter.`);
+          // Deal damage to all adjacent enemies (mandatory)
+          for (const target of adjacentEnemies) {
+            target.hp = Math.max(0, target.hp - 1);
+            addLog(state, `Electrical Overflow: ${target.name} takes 1 damage! (${target.hp} HP)`);
+          }
+          checkHeroDeath(state);
+          if (state.phase === 'gameOver') return;
+          // Build push targets list (surviving adjacent enemies only)
+          const survivingTargets = adjacentEnemies.filter(f => f.hp > 0);
+          if (survivingTargets.length > 0) {
+            state.teslaOverflowPushTargets = survivingTargets.map(f => f.id);
+            const first = survivingTargets[0];
+            state.pushTargetId = first.id;
+            state.pushRange = 1;
+            state.phase = 'tesla_overflow_push';
+            addLog(state, `Electrical Overflow: Move ${first.name} up to 1 space, or skip.`);
+          }
           return;
         }
       }
@@ -634,44 +652,55 @@ export function getTeslaOverflowTargets(state: GameState): Fighter[] {
   );
 }
 
-export function useTeslaOverflow(state: GameState): GameState {
+/** Resolve Tesla overflow push: move a target fighter to a space */
+export function resolveTeslaOverflowPush(state: GameState, spaceId: string): GameState {
   const s = clone(state);
-  const pi = s.currentPlayer;
-  const hero = getHero(s, pi);
-  if (!hero) { s.phase = 'playing'; return s; }
-  const opponentIndex = pi === 0 ? 1 : 0;
-  const adjacentEnemies = getAliveFighters(s, opponentIndex).filter(f =>
-    areAdjacent(s.board, hero.spaceId, f.spaceId)
-  );
-  for (const target of adjacentEnemies) {
-    target.hp = Math.max(0, target.hp - 1);
-    addLog(s, `Electrical Overflow: ${target.name} takes 1 damage! (${target.hp} HP)`);
+  const fighterId = s.pushTargetId;
+  if (!fighterId) return advanceTeslaOverflowPush(s);
+  const fighter = getFighter(s, fighterId);
+  if (!fighter) return advanceTeslaOverflowPush(s);
+
+  const reachable = getPushSpaces(s, fighterId, s.pushRange);
+  if (reachable.includes(spaceId)) {
+    fighter.spaceId = spaceId;
+    addLog(s, `Electrical Overflow: ${fighter.name} moved to ${spaceId}.`);
   }
-  checkHeroDeath(s);
-  if (s.phase === 'gameOver') return s;
-  // Push each adjacent enemy 1 space (auto-resolve: push to first available adjacent space away from Tesla)
-  for (const target of adjacentEnemies) {
-    if (target.hp > 0) {
-      const targetSpace = getSpace(s.board, target.spaceId);
-      if (targetSpace) {
-        const pushSpaces = targetSpace.adjacentIds.filter(adjId =>
-          adjId !== hero.spaceId && !isSpaceOccupied(s, adjId, target.id)
-        );
-        if (pushSpaces.length > 0) {
-          const oldSpace = target.spaceId;
-          target.spaceId = pushSpaces[0];
-          addLog(s, `Electrical Overflow: ${target.name} pushed from ${oldSpace} to ${target.spaceId}.`);
-        }
-      }
-    }
-  }
-  s.phase = 'playing';
-  return s;
+  return advanceTeslaOverflowPush(s);
 }
 
-export function skipTeslaOverflow(state: GameState): GameState {
+/** Skip Tesla overflow push for the current target */
+export function skipTeslaOverflowPush(state: GameState): GameState {
   const s = clone(state);
-  addLog(s, `Tesla does not use Electrical Overflow.`);
+  const fighterId = s.pushTargetId;
+  if (fighterId) {
+    const f = getFighter(s, fighterId);
+    addLog(s, `Electrical Overflow: ${f?.name} stays in place.`);
+  }
+  return advanceTeslaOverflowPush(s);
+}
+
+/** Advance to the next overflow push target, or finish */
+function advanceTeslaOverflowPush(s: GameState): GameState {
+  // Remove the current target from the list
+  const currentId = s.pushTargetId;
+  s.teslaOverflowPushTargets = s.teslaOverflowPushTargets.filter(id => id !== currentId);
+  s.pushTargetId = null;
+  s.pushRange = 0;
+
+  if (s.teslaOverflowPushTargets.length > 0) {
+    const nextId = s.teslaOverflowPushTargets[0];
+    const nextFighter = getFighter(s, nextId);
+    if (nextFighter && nextFighter.hp > 0) {
+      s.pushTargetId = nextId;
+      s.pushRange = 1;
+      s.phase = 'tesla_overflow_push';
+      addLog(s, `Electrical Overflow: Move ${nextFighter.name} up to 1 space, or skip.`);
+      return s;
+    }
+    // If fighter died somehow, skip to next
+    return advanceTeslaOverflowPush(s);
+  }
+
   s.phase = 'playing';
   return s;
 }
@@ -692,18 +721,11 @@ function teslaChargeCoils(state: GameState, playerIndex: number, count: number) 
 export function resolveTeslaCoilChoice(state: GameState, coilCount: number): GameState {
   const s = clone(state);
   const effectType = s.teslaPendingCoilEffect;
+  const context = s.teslaCoilChoiceContext;
   s.teslaPendingCoilEffect = null;
+  s.teslaCoilChoiceContext = null;
 
-  if (!effectType || coilCount === 0) {
-    // Skip discharging
-    addLog(s, `Tesla chooses not to discharge coils.`);
-    if (s.combat) {
-      return continueCombatAfterTeslaCoilChoice(s, effectType || '', 0);
-    }
-    return continueAfterTeslaEffect(s);
-  }
-
-  // Find which player owns the Tesla card in combat
+  // Find which player owns the Tesla card
   let teslaPlayerIndex = s.currentPlayer;
   if (s.combat) {
     const attacker = getFighter(s, s.combat.attackerId)!;
@@ -712,51 +734,256 @@ export function resolveTeslaCoilChoice(state: GameState, coilCount: number): Gam
     else if (defender.characterId === 'tesla') teslaPlayerIndex = defender.owner;
   }
 
-  teslaDischargeCoils(s, teslaPlayerIndex, coilCount);
-  return continueCombatAfterTeslaCoilChoice(s, effectType, coilCount);
-}
+  if (!effectType || coilCount === 0) {
+    addLog(s, `Tesla chooses not to discharge coils.`);
+  } else {
+    teslaDischargeCoils(s, teslaPlayerIndex, coilCount);
+  }
 
-function continueCombatAfterTeslaCoilChoice(state: GameState, effectType: string, coilCount: number): GameState {
-  const s = state;
-  if (!s.combat) return continueAfterTeslaEffect(s);
-
-  const attacker = getFighter(s, s.combat.attackerId)!;
-
+  // Apply the effect based on type and coilCount
   switch (effectType) {
     case 'teslaCoilCancel': {
-      // Polyphase Coils: 1 coil = cancel effects, 2 coils = also ignore value
-      if (coilCount >= 1) {
-        // Determine if Tesla is attacker or defender
+      // Polyphase Coils (immediately): 1 = cancel effects, 2 = also ignore value
+      if (coilCount >= 1 && s.combat) {
+        const attacker = getFighter(s, s.combat.attackerId)!;
         if (attacker.characterId === 'tesla') {
           s.combat.defenderEffectsCancelled = true;
           addLog(s, `Polyphase Coils: Opponent's card effects cancelled!`);
           if (coilCount >= 2) {
+            s.combat.teslaIgnoreOpponentValue = true;
             addLog(s, `Polyphase Coils: Opponent's card value ignored!`);
           }
         } else {
           s.combat.attackerEffectsCancelled = true;
           addLog(s, `Polyphase Coils: Opponent's card effects cancelled!`);
           if (coilCount >= 2) {
+            s.combat.teslaIgnoreOpponentValue = true;
             addLog(s, `Polyphase Coils: Opponent's card value ignored!`);
           }
         }
       }
       return continueCombatAfterImmediately(s);
     }
+
+    case 'teslaCoilValue': {
+      // Death Ray (during-combat): 1 coil = value 5, 2 coils = value 7
+      if (coilCount >= 1 && s.combat) {
+        const atkCardDef = s.combat.attackCard ? getCardDef(s.combat.attackCard, getCharDef(s.players[teslaPlayerIndex].characterId)) : null;
+        let newVal = 5;
+        if (coilCount >= 2) {
+          // Use the param value (default 7) for 2-coil
+          const effects = atkCardDef?.effects || [];
+          const deathRayEffect = effects.find(e => e.type === 'teslaCoilValue');
+          newVal = parseInt(deathRayEffect?.param || '7', 10);
+          addLog(s, `Death Ray: Value becomes ${newVal}!`);
+        } else {
+          // Use the amount value (default 5) for 1-coil
+          const effects = atkCardDef?.effects || [];
+          const deathRayEffect = effects.find(e => e.type === 'teslaCoilValue');
+          newVal = deathRayEffect?.amount || 5;
+          addLog(s, `Death Ray: Value becomes ${newVal}!`);
+        }
+        if (context === 'duringCombat_atk') {
+          s.combat.teslaAtkValueReplace = newVal;
+        } else {
+          s.combat.teslaDefValueReplace = newVal;
+        }
+      }
+      break;
+    }
+
+    case 'teslaCoilRevealDiscard': {
+      // X-Ray Radiation (during-combat): reveal top card, 1 = discard it, 2 = discard + add boost
+      if (s.combat) {
+        const opponentIdx = context === 'duringCombat_atk'
+          ? getFighter(s, s.combat.defenderId)!.owner
+          : getFighter(s, s.combat.attackerId)!.owner;
+        const opponentPlayer = s.players[opponentIdx];
+        const opponentCharDef = getCharDef(opponentPlayer.characterId);
+        if (opponentPlayer.deck.length > 0) {
+          const topCard = opponentPlayer.deck[opponentPlayer.deck.length - 1];
+          const topDef = getCardDef(topCard, opponentCharDef);
+          addLog(s, `X-Ray Radiation: Revealed ${topDef?.name || 'a card'} (boost ${topDef?.boost || 0}) on top of opponent's deck.`);
+          if (coilCount >= 1) {
+            const removed = opponentPlayer.deck.pop()!;
+            opponentPlayer.discard.push(removed);
+            if (coilCount >= 2) {
+              const boost = topDef?.boost || 0;
+              if (context === 'duringCombat_atk') {
+                s.combat.teslaAtkValueDelta += boost;
+              } else {
+                s.combat.teslaDefValueDelta += boost;
+              }
+              addLog(s, `X-Ray Radiation: Discarded ${topDef?.name} and added +${boost} to value!`);
+            } else {
+              addLog(s, `X-Ray Radiation: Discarded ${topDef?.name}!`);
+            }
+          }
+        } else {
+          addLog(s, `X-Ray Radiation: Opponent's deck is empty.`);
+        }
+      }
+      break;
+    }
+
+    case 'teslaCoilGainActions': {
+      // 7 Hertz (after-combat): 1 coil = +1 action, 2 coils = +2 actions
+      if (coilCount >= 1) {
+        s.players[teslaPlayerIndex].actionsRemaining += coilCount;
+        addLog(s, `7 Hertz (${coilCount} coil${coilCount > 1 ? 's' : ''}): Gained ${coilCount} action${coilCount > 1 ? 's' : ''}!`);
+      }
+      return continueAfterCombatTeslaChoice(s);
+    }
+
+    case 'teslaCoilZoneDamage': {
+      // Lightning Storm (after-combat): 1 coil = 1 zone dmg, 2 coils = 2 zone dmg
+      if (coilCount >= 1) {
+        const damageAmt = coilCount;
+        const hero = getHero(s, teslaPlayerIndex);
+        if (hero && hero.hp > 0) {
+          const opponentIdx = teslaPlayerIndex === 0 ? 1 : 0;
+          const enemiesInZone = getAliveFighters(s, opponentIdx).filter(f =>
+            sameZone(s.board, hero.spaceId, f.spaceId)
+          );
+          for (const target of enemiesInZone) {
+            target.hp = Math.max(0, target.hp - damageAmt);
+            addLog(s, `Lightning Storm: ${target.name} takes ${damageAmt} damage! (${target.hp} HP)`);
+          }
+          if (enemiesInZone.length === 0) {
+            addLog(s, `Lightning Storm: No opposing fighters in Tesla's zone.`);
+          }
+          checkHeroDeath(s);
+        }
+      }
+      return continueAfterCombatTeslaChoice(s);
+    }
+
+    case 'teslaCoilRepulsion': {
+      // Repulsion Blast (after-combat): 1 coil = also move Tesla 2, 2 coils = also opponent discards random
+      if (coilCount >= 1) {
+        const hero = getHero(s, teslaPlayerIndex);
+        if (hero && hero.hp > 0) {
+          s.effectQueue.push({
+            type: 'moveFighter',
+            playerIndex: teslaPlayerIndex,
+            fighterId: hero.id,
+            range: 2,
+            label: `Repulsion Blast (${coilCount} coil${coilCount > 1 ? 's' : ''}): Move Tesla up to 2 spaces.`,
+          });
+        }
+        if (coilCount >= 2) {
+          const opponentIdx = teslaPlayerIndex === 0 ? 1 : 0;
+          const opponentPlayer = s.players[opponentIdx];
+          if (opponentPlayer.hand.length > 0) {
+            const randIdx = Math.floor(Math.random() * opponentPlayer.hand.length);
+            const discarded = opponentPlayer.hand.splice(randIdx, 1)[0];
+            opponentPlayer.discard.push(discarded);
+            const charDef = getCharDef(opponentPlayer.characterId);
+            const def = getCardDef(discarded, charDef);
+            addLog(s, `Repulsion Blast (2 coils): ${opponentPlayer.name} discards ${def?.name || 'a card'} at random!`);
+          }
+        }
+      }
+      return continueAfterCombatTeslaChoice(s);
+    }
+
+    case 'teslaCoilDraw': {
+      // Intense Experimentation (after-combat): base draw 1 always happens, 1 coil = draw 2, 2 coils = draw 3 + heal 1
+      if (coilCount >= 2) {
+        drawCards(s, teslaPlayerIndex, 3);
+        const hero = getHero(s, teslaPlayerIndex);
+        if (hero && hero.hp < hero.maxHp) {
+          hero.hp = Math.min(hero.maxHp, hero.hp + 1);
+          addLog(s, `Intense Experimentation (2 coils): Drew 3 cards, Tesla recovers 1 health! (${hero.hp}/${hero.maxHp} HP)`);
+        } else {
+          addLog(s, `Intense Experimentation (2 coils): Drew 3 cards!`);
+        }
+      } else if (coilCount >= 1) {
+        drawCards(s, teslaPlayerIndex, 2);
+        addLog(s, `Intense Experimentation (1 coil): Drew 2 cards!`);
+      } else {
+        drawCards(s, teslaPlayerIndex, 1);
+        addLog(s, `Intense Experimentation: Drew 1 card.`);
+      }
+      return continueAfterCombatTeslaChoice(s);
+    }
+
     default:
       break;
   }
 
-  // For during-combat and after-combat effects, just continue resolve
-  return continueAfterTeslaEffect(s);
+  // For during-combat effects, continue to next step in combat pipeline
+  if (context === 'duringCombat_def') {
+    return continueAttackerDuringCombat(s);
+  }
+  if (context === 'duringCombat_atk') {
+    // Check if there's a during-combat boost to play (re-enter that check)
+    return continueAfterTeslaAttackerDuringCombat(s);
+  }
+  return continueAfterCombatTeslaChoice(s);
 }
 
-function continueAfterTeslaEffect(state: GameState): GameState {
+/** After attacker's Tesla during-combat choice, check for during-combat boosts and proceed */
+function continueAfterTeslaAttackerDuringCombat(s: GameState): GameState {
+  if (!s.combat) return s;
+  const attacker = getFighter(s, s.combat.attackerId)!;
+  const atkPlayer = s.players[attacker.owner];
+  const atkCharDef = getCharDef(atkPlayer.characterId);
+  const atkCardDef = s.combat.attackCard ? getCardDef(s.combat.attackCard, atkCharDef) : null;
+  const atkDuring = atkCardDef?.effects.filter(e => e.timing === 'duringCombat') || [];
+
+  let atkHasDuringBoost = false;
+  for (const effect of atkDuring) {
+    if (effect.type === 'boostAttack' && atkPlayer.hand.length > 0) atkHasDuringBoost = true;
+    if (effect.type === 'discardToBoost' && atkPlayer.hand.length > 0) atkHasDuringBoost = true;
+  }
+
+  if (atkHasDuringBoost) {
+    s.phase = 'combat_duringBoost';
+    const hasDiscardToBoost = atkDuring.some(e => e.type === 'discardToBoost');
+    if (hasDiscardToBoost) {
+      addLog(s, `${atkCardDef?.name}: You may discard a card for +2 value. Select a card or skip.`);
+    } else {
+      addLog(s, `${atkCardDef?.name}: You may play a card as a boost. Select a card or skip.`);
+    }
+    return s;
+  }
+
+  return resolveCombatDamage(s);
+}
+
+/** Continue processing after-combat effect queue after a Tesla coil choice */
+function continueAfterCombatTeslaChoice(state: GameState): GameState {
   if (state.phase === 'gameOver') return state;
-  state.phase = 'playing';
   state.teslaPendingCoilCardDefId = null;
   state.teslaCoilRevealedCard = null;
-  return state;
+  // Continue processing the effect queue
+  if (state.effectQueue.length > 0) {
+    return processNextEffect(state);
+  }
+  return checkRainOfArrowsFollowUp(state);
+}
+
+/** The Alternating Current: binary choice — charge both coils or discharge both to heal 2 */
+export function resolveTeslaAlternatingChoice(state: GameState, choice: string): GameState {
+  const s = clone(state);
+  const pi = s.currentPlayer;
+  const hero = getHero(s, pi);
+
+  if (choice === 'charge') {
+    teslaChargeCoils(s, pi, 2);
+    addLog(s, `The Alternating Current: Both coils charged!`);
+  } else if (choice === 'heal') {
+    if (s.teslaCoilsCharged[pi] >= 2 && hero) {
+      teslaDischargeCoils(s, pi, 2);
+      hero.hp = Math.min(hero.maxHp, hero.hp + 2);
+      addLog(s, `The Alternating Current: Discharged both coils — Tesla recovers 2 health! (${hero.hp}/${hero.maxHp} HP)`);
+    } else {
+      addLog(s, `The Alternating Current: Not enough coils to heal. No effect.`);
+    }
+  }
+
+  return continueAfterCombatTeslaChoice(s);
 }
 
 /** Improvised Shield: player chooses to flip boomerang for value + cancel effects */
@@ -1045,6 +1272,10 @@ function checkRainOfArrowsFollowUp(s: GameState): GameState {
         attackerWon: false,
         airScooterUsed: false,
         teslaIgnoreOpponentValue: false,
+        teslaAtkValueDelta: 0,
+        teslaDefValueDelta: 0,
+        teslaAtkValueReplace: null,
+        teslaDefValueReplace: null,
       };
       // Store the follow-up value for damage resolution
       s.rainOfArrowsFollowUp = { ...followUp }; // re-store for damage calc
@@ -1128,7 +1359,7 @@ export function startManeuver(state: GameState): GameState {
   drawCards(s, s.currentPlayer, 1);
   if (s.phase === 'gameOver') return s;
   s.maneuverBoost = 0;
-  s.maneuverFightersToMove = getAliveFighters(s, s.currentPlayer).map(f => f.id);
+  s.maneuverFightersToMove = getAliveFighters(s, s.currentPlayer).filter(f => f.spaceId !== '').map(f => f.id);
   s.maneuverCurrentFighter = null;
   s.phase = 'maneuver_boost';
   addLog(s, `${currentPlayer(s).name} maneuvers (drew a card). Optionally discard a card for movement boost.`);
@@ -1270,6 +1501,10 @@ export function selectAttackTarget(state: GameState, defenderId: string): GameSt
     attackerWon: false,
     airScooterUsed,
     teslaIgnoreOpponentValue: false,
+    teslaAtkValueDelta: 0,
+    teslaDefValueDelta: 0,
+    teslaAtkValueReplace: null,
+    teslaDefValueReplace: null,
   };
   s.phase = 'attack_selectCard';
   addLog(s, `${attacker.name} attacks ${defender.name}! Choose an attack card.`);
@@ -1305,6 +1540,10 @@ export function resolveAirScooterChoice(state: GameState, spaceId: string): Game
     attackerWon: false,
     airScooterUsed: true,
     teslaIgnoreOpponentValue: false,
+    teslaAtkValueDelta: 0,
+    teslaDefValueDelta: 0,
+    teslaAtkValueReplace: null,
+    teslaDefValueReplace: null,
   };
   s.phase = 'attack_selectCard';
   addLog(s, `${attacker.name} attacks ${defender.name}! Choose an attack card.`);
@@ -1402,19 +1641,15 @@ function resolveCombat(state: GameState): GameState {
       s.combat.attackerEffectsCancelled = true;
       addLog(s, `${defCardDef?.name}: Cancels all effects on attacker's card!`);
     }
-    // Tesla: Polyphase Coils (defender)
+    // Tesla: Polyphase Coils (defender) — interactive coil choice
     if (effect.type === 'teslaCoilCancel' && !s.combat.defenderEffectsCancelled) {
       const coils = s.teslaCoilsCharged[defender.owner];
       if (coils >= 1) {
-        const discharge = Math.min(coils, 2);
-        teslaDischargeCoils(s, defender.owner, discharge);
-        s.combat.attackerEffectsCancelled = true;
-        addLog(s, `Polyphase Coils: Opponent's card effects cancelled!`);
-        if (discharge >= 2) {
-          // Mark that attacker's value should be ignored (set to 0)
-          s.combat.teslaIgnoreOpponentValue = true;
-          addLog(s, `Polyphase Coils: Opponent's card value ignored!`);
-        }
+        s.teslaPendingCoilEffect = 'teslaCoilCancel';
+        s.teslaCoilChoiceContext = 'immediately';
+        s.phase = 'tesla_coilChoice';
+        addLog(s, `Polyphase Coils: Choose how many coils to discharge (${coils} available). 1 = cancel effects, 2 = cancel effects + ignore value.`);
+        return s;
       }
     }
     if (effect.type === 'swapAangAppa' && !s.combat.defenderEffectsCancelled) {
@@ -1457,17 +1692,15 @@ function resolveCombat(state: GameState): GameState {
         addLog(s, `${atkCardDef?.name}: Cancels all effects on defender's card!`);
       }
       // Tesla: Polyphase Coils (attacker)
+      // Tesla: Polyphase Coils (attacker) — interactive coil choice
       if (effect.type === 'teslaCoilCancel') {
         const coils = s.teslaCoilsCharged[attacker.owner];
         if (coils >= 1) {
-          const discharge = Math.min(coils, 2);
-          teslaDischargeCoils(s, attacker.owner, discharge);
-          s.combat.defenderEffectsCancelled = true;
-          addLog(s, `Polyphase Coils: Opponent's card effects cancelled!`);
-          if (discharge >= 2) {
-            s.combat.teslaIgnoreOpponentValue = true;
-            addLog(s, `Polyphase Coils: Opponent's card value ignored!`);
-          }
+          s.teslaPendingCoilEffect = 'teslaCoilCancel';
+          s.teslaCoilChoiceContext = 'immediately';
+          s.phase = 'tesla_coilChoice';
+          addLog(s, `Polyphase Coils: Choose how many coils to discharge (${coils} available). 1 = cancel effects, 2 = cancel effects + ignore value.`);
+          return s;
         }
       }
       if (effect.type === 'discardRandomAndDeck') {
@@ -1702,6 +1935,23 @@ function continueCombatAfterImmediately(s: GameState): GameState {
     }
   }
 
+  // Tesla: check if defender has a during-combat coil effect that needs choice
+  if (!s.combat.defenderEffectsCancelled && defCardDef) {
+    for (const effect of defCardDef.effects) {
+      if (effect.timing === 'duringCombat' && (effect.type === 'teslaCoilValue' || effect.type === 'teslaCoilRevealDiscard')) {
+        const coils = s.teslaCoilsCharged[defender.owner];
+        if (coils >= 1) {
+          s.teslaPendingCoilEffect = effect.type;
+          s.teslaCoilChoiceContext = 'duringCombat_def';
+          s.phase = 'tesla_coilChoice';
+          const effectName = effect.type === 'teslaCoilValue' ? 'Death Ray' : 'X-Ray Radiation';
+          addLog(s, `${effectName}: Choose how many coils to discharge (${coils} available).`);
+          return s;
+        }
+      }
+    }
+  }
+
   // Continue to attacker's during-combat phase
   return continueAttackerDuringCombat(s);
 }
@@ -1764,6 +2014,23 @@ function continueAttackerDuringCombat(s: GameState): GameState {
         s.sokkaBoomerangReady[attacker.owner] = false;
         s.combat!.defenderEffectsCancelled = true;
         addLog(s, `${atkCardDef?.name}: Boomerang flipped to OUT! Value becomes ${effect.amount}, opponent's effects cancelled!`);
+      }
+    }
+  }
+
+  // Tesla: check if attacker has a during-combat coil effect that needs choice
+  if (!s.combat.attackerEffectsCancelled && atkCardDef) {
+    for (const effect of atkCardDef.effects) {
+      if (effect.timing === 'duringCombat' && (effect.type === 'teslaCoilValue' || effect.type === 'teslaCoilRevealDiscard')) {
+        const coils = s.teslaCoilsCharged[attacker.owner];
+        if (coils >= 1) {
+          s.teslaPendingCoilEffect = effect.type;
+          s.teslaCoilChoiceContext = 'duringCombat_atk';
+          s.phase = 'tesla_coilChoice';
+          const effectName = effect.type === 'teslaCoilValue' ? 'Death Ray' : 'X-Ray Radiation';
+          addLog(s, `${effectName}: Choose how many coils to discharge (${coils} available).`);
+          return s;
+        }
       }
     }
   }
@@ -1973,87 +2240,15 @@ function resolveCombatDamage(state: GameState): GameState {
     }
   }
 
-  // Tesla: Death Ray — coil-dependent value (attacker)
-  if (!s.combat.attackerEffectsCancelled && atkCardDef) {
-    for (const effect of atkCardDef.effects) {
-      if (effect.timing === 'duringCombat' && effect.type === 'teslaCoilValue') {
-        const coils = s.teslaCoilsCharged[attacker.owner];
-        if (coils >= 2) {
-          const newVal = parseInt(effect.param || '7', 10);
-          atkValue = (atkValue - (atkCardDef.value || 0)) + newVal;
-          teslaDischargeCoils(s, attacker.owner, 2);
-          addLog(s, `Death Ray: 2 coils discharged — value becomes ${newVal}!`);
-        } else if (coils >= 1) {
-          atkValue = (atkValue - (atkCardDef.value || 0)) + (effect.amount || 5);
-          teslaDischargeCoils(s, attacker.owner, 1);
-          addLog(s, `Death Ray: 1 coil discharged — value becomes ${effect.amount || 5}!`);
-        }
-      }
-      // X-Ray Radiation: reveal top card, optionally discard + add boost
-      if (effect.timing === 'duringCombat' && effect.type === 'teslaCoilRevealDiscard') {
-        const opponentPlayer = s.players[defender.owner];
-        const opponentCharDef = getCharDef(opponentPlayer.characterId);
-        if (opponentPlayer.deck.length > 0) {
-          const topCard = opponentPlayer.deck[opponentPlayer.deck.length - 1];
-          const topDef = getCardDef(topCard, opponentCharDef);
-          addLog(s, `X-Ray Radiation: Revealed ${topDef?.name || 'a card'} (boost ${topDef?.boost || 0}) on top of opponent's deck.`);
-          const coils = s.teslaCoilsCharged[attacker.owner];
-          if (coils >= 2) {
-            const removed = opponentPlayer.deck.pop()!;
-            opponentPlayer.discard.push(removed);
-            atkValue += topDef?.boost || 0;
-            teslaDischargeCoils(s, attacker.owner, 2);
-            addLog(s, `X-Ray Radiation: 2 coils — discarded ${topDef?.name} and added +${topDef?.boost || 0} to value!`);
-          } else if (coils >= 1) {
-            const removed = opponentPlayer.deck.pop()!;
-            opponentPlayer.discard.push(removed);
-            teslaDischargeCoils(s, attacker.owner, 1);
-            addLog(s, `X-Ray Radiation: 1 coil — discarded ${topDef?.name}!`);
-          }
-        }
-      }
-    }
+  // Tesla: Apply during-combat coil effects (already resolved via interactive choice)
+  if (s.combat.teslaAtkValueReplace !== null) {
+    atkValue = (atkValue - (atkCardDef?.value || 0)) + s.combat.teslaAtkValueReplace;
   }
-  // Tesla: Death Ray / X-Ray Radiation on defense (versatile cards)
-  if (!s.combat.defenderEffectsCancelled && defCardDef) {
-    for (const effect of defCardDef.effects) {
-      if (effect.timing === 'duringCombat' && effect.type === 'teslaCoilValue') {
-        const coils = s.teslaCoilsCharged[defender.owner];
-        if (coils >= 2) {
-          const newVal = parseInt(effect.param || '7', 10);
-          defValue = (defValue - (defCardDef.value || 0)) + newVal;
-          teslaDischargeCoils(s, defender.owner, 2);
-          addLog(s, `Death Ray: 2 coils discharged — value becomes ${newVal}!`);
-        } else if (coils >= 1) {
-          defValue = (defValue - (defCardDef.value || 0)) + (effect.amount || 5);
-          teslaDischargeCoils(s, defender.owner, 1);
-          addLog(s, `Death Ray: 1 coil discharged — value becomes ${effect.amount || 5}!`);
-        }
-      }
-      if (effect.timing === 'duringCombat' && effect.type === 'teslaCoilRevealDiscard') {
-        const opponentPlayer = s.players[attacker.owner];
-        const opponentCharDef = getCharDef(opponentPlayer.characterId);
-        if (opponentPlayer.deck.length > 0) {
-          const topCard = opponentPlayer.deck[opponentPlayer.deck.length - 1];
-          const topDef = getCardDef(topCard, opponentCharDef);
-          addLog(s, `X-Ray Radiation: Revealed ${topDef?.name || 'a card'} (boost ${topDef?.boost || 0}) on top of opponent's deck.`);
-          const coils = s.teslaCoilsCharged[defender.owner];
-          if (coils >= 2) {
-            const removed = opponentPlayer.deck.pop()!;
-            opponentPlayer.discard.push(removed);
-            defValue += topDef?.boost || 0;
-            teslaDischargeCoils(s, defender.owner, 2);
-            addLog(s, `X-Ray Radiation: 2 coils — discarded ${topDef?.name} and added +${topDef?.boost || 0} to value!`);
-          } else if (coils >= 1) {
-            const removed = opponentPlayer.deck.pop()!;
-            opponentPlayer.discard.push(removed);
-            teslaDischargeCoils(s, defender.owner, 1);
-            addLog(s, `X-Ray Radiation: 1 coil — discarded ${topDef?.name}!`);
-          }
-        }
-      }
-    }
+  atkValue += s.combat.teslaAtkValueDelta;
+  if (s.combat.teslaDefValueReplace !== null) {
+    defValue = (defValue - (defCardDef?.value || 0)) + s.combat.teslaDefValueReplace;
   }
+  defValue += s.combat.teslaDefValueDelta;
 
   // Polyphase Coils: ignore opponent's value (2 coils discharged)
   if (s.combat.teslaIgnoreOpponentValue) {
@@ -2574,48 +2769,35 @@ function processAfterCombatEffect(
     // ---- Tesla after-combat effects ----
 
     case 'teslaCoilGainActions': {
-      // 7 Hertz: discharge coils to gain actions
+      // 7 Hertz: queue coil choice for gaining actions
       const coils = state.teslaCoilsCharged[selfPlayer.index];
-      if (coils >= 2) {
-        teslaDischargeCoils(state, selfPlayer.index, 2);
-        selfPlayer.actionsRemaining += 2;
-        addLog(state, `7 Hertz (2 coils): Gained 2 actions!`);
-      } else if (coils >= 1) {
-        teslaDischargeCoils(state, selfPlayer.index, 1);
-        selfPlayer.actionsRemaining += 1;
-        addLog(state, `7 Hertz (1 coil): Gained 1 action!`);
+      if (coils >= 1) {
+        queue.push({
+          type: 'teslaCoilChoice',
+          playerIndex: selfPlayer.index,
+          label: `7 Hertz: Choose how many coils to discharge (${coils} available). 1 = +1 action, 2 = +2 actions.`,
+          teslaEffectType: 'teslaCoilGainActions',
+        });
       }
       break;
     }
 
     case 'teslaCoilZoneDamage': {
-      // Lightning Storm: discharge coils for zone damage
+      // Lightning Storm: queue coil choice for zone damage
       const coils = state.teslaCoilsCharged[selfPlayer.index];
       if (coils >= 1) {
-        const damageAmt = coils >= 2 ? 2 : 1;
-        const discharge = Math.min(coils, 2);
-        teslaDischargeCoils(state, selfPlayer.index, discharge);
-        const hero = getHero(state, selfPlayer.index);
-        if (hero && hero.hp > 0) {
-          const opponentIdx = selfPlayer.index === 0 ? 1 : 0;
-          const enemiesInZone = getAliveFighters(state, opponentIdx).filter(f =>
-            sameZone(state.board, hero.spaceId, f.spaceId)
-          );
-          for (const target of enemiesInZone) {
-            target.hp = Math.max(0, target.hp - damageAmt);
-            addLog(state, `Lightning Storm: ${target.name} takes ${damageAmt} damage! (${target.hp} HP)`);
-          }
-          if (enemiesInZone.length === 0) {
-            addLog(state, `Lightning Storm: No opposing fighters in Tesla's zone.`);
-          }
-          checkHeroDeath(state);
-        }
+        queue.push({
+          type: 'teslaCoilChoice',
+          playerIndex: selfPlayer.index,
+          label: `Lightning Storm: Choose how many coils to discharge (${coils} available). 1 = 1 zone damage, 2 = 2 zone damage.`,
+          teslaEffectType: 'teslaCoilZoneDamage',
+        });
       }
       break;
     }
 
     case 'teslaCoilRepulsion': {
-      // Repulsion Blast: push opponent, then optional coil effects
+      // Repulsion Blast: base push always happens, then coil choice for enhanced effects
       if (opponent.hp > 0) {
         queue.push({
           type: 'pushFighter',
@@ -2627,37 +2809,18 @@ function processAfterCombatEffect(
       }
       const coils = state.teslaCoilsCharged[selfPlayer.index];
       if (coils >= 1) {
-        // 1 coil: also move Tesla up to 2 spaces
-        const hero = getHero(state, selfPlayer.index);
-        if (hero && hero.hp > 0) {
-          queue.push({
-            type: 'moveFighter',
-            playerIndex: selfPlayer.index,
-            fighterId: hero.id,
-            range: 2,
-            label: `Repulsion Blast (1 coil): Move Tesla up to 2 spaces.`,
-          });
-        }
-        if (coils >= 2) {
-          // 2 coils: also opponent discards 1 random card
-          if (opponentPlayer.hand.length > 0) {
-            const randIdx = Math.floor(Math.random() * opponentPlayer.hand.length);
-            const discarded = opponentPlayer.hand.splice(randIdx, 1)[0];
-            opponentPlayer.discard.push(discarded);
-            const charDef = getCharDef(opponentPlayer.characterId);
-            const def = getCardDef(discarded, charDef);
-            addLog(state, `Repulsion Blast (2 coils): ${opponentPlayer.name} discards ${def?.name || 'a card'} at random!`);
-          }
-          teslaDischargeCoils(state, selfPlayer.index, 2);
-        } else {
-          teslaDischargeCoils(state, selfPlayer.index, 1);
-        }
+        queue.push({
+          type: 'teslaCoilChoice',
+          playerIndex: selfPlayer.index,
+          label: `Repulsion Blast: Choose how many coils to discharge (${coils} available). 1 = move Tesla 2 spaces, 2 = also opponent discards random.`,
+          teslaEffectType: 'teslaCoilRepulsion',
+        });
       }
       break;
     }
 
     case 'teslaChargeCoils': {
-      // Kinetic Induction: charge 1 coil, or both if won
+      // Kinetic Induction: charge 1 coil, or both if won (no discharge choice needed)
       if (selfWon) {
         teslaChargeCoils(state, selfPlayer.index, 2);
         addLog(state, `Kinetic Induction: Won combat — both coils charged!`);
@@ -2669,39 +2832,28 @@ function processAfterCombatEffect(
     }
 
     case 'teslaAlternatingCurrent': {
-      // The Alternating Current: choose charge both or discharge both to heal 2
-      // Auto-resolve: if both coils charged, discharge to heal; otherwise charge both
-      const coils = state.teslaCoilsCharged[selfPlayer.index];
-      const hero = getHero(state, selfPlayer.index);
-      if (coils >= 2 && hero && hero.hp < hero.maxHp) {
-        teslaDischargeCoils(state, selfPlayer.index, 2);
-        hero.hp = Math.min(hero.maxHp, hero.hp + 2);
-        addLog(state, `The Alternating Current: Discharged both coils — Tesla recovers 2 health! (${hero.hp}/${hero.maxHp} HP)`);
-      } else {
-        teslaChargeCoils(state, selfPlayer.index, 2);
-        addLog(state, `The Alternating Current: Both coils charged!`);
-      }
+      // The Alternating Current: queue binary choice (charge or heal)
+      queue.push({
+        type: 'teslaAlternatingChoice',
+        playerIndex: selfPlayer.index,
+        label: `The Alternating Current: Choose — Charge both coils, or discharge both to heal 2.`,
+        teslaEffectType: 'teslaAlternatingCurrent',
+      });
       break;
     }
 
     case 'teslaCoilDraw': {
-      // Intense Experimentation: draw 1, or discharge for more
+      // Intense Experimentation: queue coil choice for draw
       const coils = state.teslaCoilsCharged[selfPlayer.index];
-      if (coils >= 2) {
-        teslaDischargeCoils(state, selfPlayer.index, 2);
-        drawCards(state, selfPlayer.index, 3);
-        const hero = getHero(state, selfPlayer.index);
-        if (hero && hero.hp < hero.maxHp) {
-          hero.hp = Math.min(hero.maxHp, hero.hp + 1);
-          addLog(state, `Intense Experimentation (2 coils): Drew 3 cards, Tesla recovers 1 health! (${hero.hp}/${hero.maxHp} HP)`);
-        } else {
-          addLog(state, `Intense Experimentation (2 coils): Drew 3 cards!`);
-        }
-      } else if (coils >= 1) {
-        teslaDischargeCoils(state, selfPlayer.index, 1);
-        drawCards(state, selfPlayer.index, 2);
-        addLog(state, `Intense Experimentation (1 coil): Drew 2 cards!`);
+      if (coils >= 1) {
+        queue.push({
+          type: 'teslaCoilChoice',
+          playerIndex: selfPlayer.index,
+          label: `Intense Experimentation: Choose how many coils to discharge (${coils} available). 0 = draw 1, 1 = draw 2, 2 = draw 3 + heal 1.`,
+          teslaEffectType: 'teslaCoilDraw',
+        });
       } else {
+        // No coils, just draw 1
         drawCards(state, selfPlayer.index, 1);
         addLog(state, `Intense Experimentation: Drew 1 card.`);
       }
@@ -2819,6 +2971,20 @@ function processNextEffect(state: GameState): GameState {
       } else {
         return processNextEffect(state);
       }
+      break;
+    }
+
+    case 'teslaCoilChoice': {
+      state.teslaPendingCoilEffect = effect.teslaEffectType || null;
+      state.teslaCoilChoiceContext = 'afterCombat';
+      state.phase = 'tesla_coilChoice';
+      addLog(state, effect.label);
+      break;
+    }
+
+    case 'teslaAlternatingChoice': {
+      state.phase = 'tesla_alternating_choice';
+      addLog(state, effect.label);
       break;
     }
   }
@@ -3711,8 +3877,6 @@ export function useCloneVats(state: GameState, cardId: string): GameState {
   const def = getCardDef(card, charDef);
   addLog(s, `Clone Vats: Discarded ${def?.name || 'a card'}.`);
 
-  s.mewtwoCloneVatsUsed = true;
-
   // Now place a clone adjacent to Mewtwo
   const adjacentSpaces = getMewtwoAdjacentSpaces(s, s.currentPlayer);
   if (adjacentSpaces.length > 0) {
@@ -3750,7 +3914,16 @@ export function placeClone(state: GameState, spaceId: string): GameState {
 
   // Check what phase we came from
   if (s.phase === 'mewtwo_placeClone') {
-    s.phase = 'playing';
+    // Check if player can place more clones (multi-clone Clone Vats)
+    const nextClone = getAvailableClone(s, playerIdx);
+    const player = s.players[playerIdx];
+    const adjacentSpaces = getMewtwoAdjacentSpaces(s, playerIdx);
+    if (nextClone && player.hand.length > 0 && adjacentSpaces.length > 0) {
+      s.phase = 'mewtwo_cloneVats';
+      addLog(s, `Clone Vats: You may discard another card to place another Clone, or skip.`);
+    } else {
+      s.phase = 'playing';
+    }
   } else if (s.phase === 'mewtwo_cloneBatch_place') {
     s.mewtwoCloneBatchRemaining--;
     if (s.mewtwoCloneBatchRemaining > 0) {
