@@ -18,7 +18,7 @@ import archer1Portrait from '../assets/Archer 1.png';
 import archer2Portrait from '../assets/Archer 2.png';
 import sokkaPortrait from '../assets/Sokka.png';
 import sukiPortrait from '../assets/Suki.png';
-import teslaPortrait from '../assets/Tesla.svg';
+import teslaPortrait from '../assets/Tesla.png';
 
 
 interface BoardProps {
