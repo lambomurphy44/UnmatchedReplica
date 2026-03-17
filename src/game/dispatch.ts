@@ -29,6 +29,14 @@ import {
   resolveRainOfArrowsDefense,
   resolveTeslaCoilChoice, resolveTeslaAlternatingChoice,
   resolveTeslaOverflowPush, skipTeslaOverflowPush,
+  resolveZeldaFormChoice,
+  resolveZeldaFaroresWind, skipZeldaFaroresWind,
+  resolveZeldaSmokeBombMove, skipZeldaSmokeBombMove,
+  resolveZeldaSongOfTime, skipZeldaSongOfTime,
+  resolveZeldaGoddessBlade, skipZeldaGoddessBlade,
+  resolveZeldaImpasMove, skipZeldaImpasMove,
+  resolveZeldaImpasTarget, resolveZeldaImpasDiscard,
+  resolveZeldaDinsFireTarget, skipZeldaDinsFire,
 } from './engine';
 
 /**
@@ -166,6 +174,37 @@ export function dispatchAction(state: GameState, actionType: string, args: Recor
         return resolveTeslaOverflowPush(state, args.spaceId as string);
       case 'skipTeslaOverflowPush':
         return skipTeslaOverflowPush(state);
+      // Zelda actions
+      case 'resolveZeldaFormChoice':
+        return resolveZeldaFormChoice(state, args.form as string);
+      case 'resolveZeldaFaroresWind':
+        return resolveZeldaFaroresWind(state, args.spaceId as string);
+      case 'skipZeldaFaroresWind':
+        return skipZeldaFaroresWind(state);
+      case 'resolveZeldaSmokeBombMove':
+        return resolveZeldaSmokeBombMove(state, args.spaceId as string);
+      case 'skipZeldaSmokeBombMove':
+        return skipZeldaSmokeBombMove(state);
+      case 'resolveZeldaSongOfTime':
+        return resolveZeldaSongOfTime(state, args.cardId as string);
+      case 'skipZeldaSongOfTime':
+        return skipZeldaSongOfTime(state);
+      case 'resolveZeldaGoddessBlade':
+        return resolveZeldaGoddessBlade(state, args.cardId as string);
+      case 'skipZeldaGoddessBlade':
+        return skipZeldaGoddessBlade(state);
+      case 'resolveZeldaImpasMove':
+        return resolveZeldaImpasMove(state, args.spaceId as string);
+      case 'skipZeldaImpasMove':
+        return skipZeldaImpasMove(state);
+      case 'resolveZeldaImpasTarget':
+        return resolveZeldaImpasTarget(state, args.targetFighterId as string);
+      case 'resolveZeldaImpasDiscard':
+        return resolveZeldaImpasDiscard(state, args.cardId as string);
+      case 'resolveZeldaDinsFireTarget':
+        return resolveZeldaDinsFireTarget(state, args.targetFighterId as string);
+      case 'skipZeldaDinsFire':
+        return skipZeldaDinsFire(state);
       default:
         return null;
     }

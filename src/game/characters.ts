@@ -1409,4 +1409,185 @@ export const TESLA: CharacterDef = {
   },
 };
 
-export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA, AANG, MEWTWO, YENNENGA, SOKKA, TESLA];
+// =============================================
+// ZELDA & SHEIK — 30 cards
+// =============================================
+
+const zeldaCards: CardDef[] = [
+  // ---- Any (usable by either form) ----
+  {
+    id: 'zelda_vanishing_strike',
+    name: 'Vanishing Strike',
+    type: 'versatile',
+    value: 3,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'zeldaVanishingStrike', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: If you are Sheik, move up to 2 spaces. If you are Zelda, draw 1 card.',
+  },
+  {
+    id: 'zelda_hylian_guard',
+    name: 'Hylian Guard',
+    type: 'defense',
+    value: 3,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'zeldaHylianGuard', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: If you are Zelda, recover 1 health. If you are Sheik, the opponent discards 1 random card.',
+  },
+  {
+    id: 'zelda_light_arrow',
+    name: 'Light Arrow',
+    type: 'attack',
+    value: 4,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'zeldaLightArrow', timing: 'immediately' },
+    ],
+    effectText: 'IMMEDIATELY: If you are Zelda, draw 1 card. If you are Sheik, deal 1 damage to the opposing fighter.',
+  },
+  {
+    id: 'zelda_sheikah_veil',
+    name: 'Sheikah Veil',
+    type: 'versatile',
+    value: 2,
+    boost: 3,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'zeldaSheikahVeil', timing: 'immediately' },
+    ],
+    effectText: 'IMMEDIATELY: The opposing fighter cannot leave their space for the rest of this turn.',
+  },
+  {
+    id: 'zelda_farores_wind',
+    name: "Farore's Wind",
+    type: 'versatile',
+    value: 2,
+    boost: 3,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'zeldaFaroresWind', timing: 'immediately' },
+    ],
+    effectText: 'IMMEDIATELY: Place your fighter in any space in your zone.',
+  },
+  {
+    id: 'zelda_dins_fire',
+    name: "Din's Fire",
+    type: 'attack',
+    value: 4,
+    boost: 3,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'zeldaDinsFire', timing: 'afterCombat' },
+    ],
+    effectText: "AFTER COMBAT: Deal 1 damage to another opposing fighter in the defending fighter's zone.",
+  },
+  // ---- Sheik only ----
+  {
+    id: 'zelda_needle_storm',
+    name: 'Needle Storm',
+    type: 'attack',
+    value: 4,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 3,
+    effects: [
+      { type: 'zeldaNeedleStormDuring', timing: 'duringCombat' },
+      { type: 'zeldaNeedleStormAfter', timing: 'afterCombat' },
+    ],
+    effectText: 'DURING COMBAT: If this attack was made using your Bonus Attack, this card\'s value is +2. AFTER COMBAT: You may move 1 space.',
+  },
+  {
+    id: 'zelda_smoke_bomb',
+    name: 'Smoke Bomb',
+    type: 'defense',
+    value: 2,
+    boost: 3,
+    restriction: 'hero',
+    quantity: 3,
+    effects: [
+      { type: 'zeldaSmokeBomb', timing: 'immediately' },
+    ],
+    effectText: 'IMMEDIATELY: You may move up to 2 spaces. Ignore all effects on the opponent\'s card.',
+  },
+  {
+    id: 'zelda_impas_training',
+    name: "Impa's Training",
+    type: 'scheme',
+    value: 0,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'zeldaImpasTraining', timing: 'immediately' },
+    ],
+    effectText: 'Move up to 3 spaces. Then choose one adjacent opponent. That player reveals their hand and you choose 1 card for them to discard.',
+  },
+  // ---- Zelda only ----
+  {
+    id: 'zelda_nayrus_love',
+    name: "Nayru's Love",
+    type: 'defense',
+    value: 3,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 3,
+    effects: [
+      { type: 'zeldaNayrusLove', timing: 'duringCombat' },
+    ],
+    effectText: 'DURING COMBAT: Prevent all damage that would be dealt to you by card effects this combat.',
+  },
+  {
+    id: 'zelda_song_of_time',
+    name: 'Song of Time',
+    type: 'scheme',
+    value: 0,
+    boost: 2,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'zeldaSongOfTime', timing: 'immediately' },
+    ],
+    effectText: 'Return up to 1 card from your discard pile to your hand.',
+  },
+  {
+    id: 'zelda_goddess_blade',
+    name: 'Goddess Blade',
+    type: 'attack',
+    value: 4,
+    boost: 3,
+    restriction: 'hero',
+    quantity: 2,
+    effects: [
+      { type: 'zeldaGoddessBlade', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: If you won the combat, you may return up to 1 card from your discard pile to your hand.',
+  },
+];
+
+export const ZELDA: CharacterDef = {
+  id: 'zelda',
+  name: 'Zelda',
+  hp: 14,
+  isRanged: true,
+  moveValue: 2,
+  deckCards: zeldaCards,
+  ability: {
+    name: 'Veil of Two Fates',
+    description: 'Start of turn: Choose Zelda (Ranged, Move 2, +1 combat value) or Sheik (Melee, Move 3, +1 action).',
+    timing: 'startOfTurn',
+  },
+};
+
+export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA, AANG, MEWTWO, YENNENGA, SOKKA, TESLA, ZELDA];

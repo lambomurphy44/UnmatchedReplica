@@ -162,6 +162,15 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
     teslaCoilRevealedCard: null,
     teslaCoilChoiceContext: null,
     teslaOverflowPushTargets: [],
+    zeldaCurrentForm: [
+      char0.id === 'zelda' ? 'zelda' : '',
+      char1.id === 'zelda' ? 'zelda' : '',
+    ],
+    zeldaMovementLock: null,
+    zeldaNayrusLoveActive: [false, false],
+    zeldaImpasRevealedCards: [],
+    zeldaImpasTargetPlayer: null,
+    zeldaBonusAttackUsed: false,
   };
 
   if (needsPlacement) {
@@ -212,6 +221,11 @@ export function sameZone(board: BoardMap, spaceA: string, spaceB: string): boole
 
 export function isSpaceOccupied(state: GameState, spaceId: string, excludeFighterId?: string): boolean {
   return state.fighters.some(f => f.spaceId === spaceId && f.hp > 0 && f.id !== excludeFighterId);
+}
+
+/** Check if a fighter is locked from movement by Sheikah Veil */
+export function isMovementLocked(state: GameState, fighterId: string): boolean {
+  return state.zeldaMovementLock === fighterId;
 }
 
 export function getReachableSpaces(board: BoardMap, fromId: string, steps: number, fighters: Fighter[], movingFighterId: string): string[] {
@@ -322,9 +336,20 @@ export function getPlayableCards(state: GameState, cardType?: 'attack' | 'defens
 }
 
 /** Check if a card can be played by a given fighter based on restriction */
-export function canFighterPlayCard(fighter: Fighter, cardDef: CardDef): boolean {
+export function canFighterPlayCard(fighter: Fighter, cardDef: CardDef, state?: GameState): boolean {
   if (cardDef.restriction === 'any') return true;
-  if (cardDef.restriction === 'hero') return fighter.isHero;
+  if (cardDef.restriction === 'hero') {
+    if (!fighter.isHero) return false;
+    // Zelda form restrictions: Sheik-only and Zelda-only cards
+    if (state && fighter.characterId === 'zelda') {
+      const form = state.zeldaCurrentForm[fighter.owner];
+      const sheikOnlyCards = ['zelda_needle_storm', 'zelda_smoke_bomb', 'zelda_impas_training'];
+      const zeldaOnlyCards = ['zelda_nayrus_love', 'zelda_song_of_time', 'zelda_goddess_blade'];
+      if (sheikOnlyCards.includes(cardDef.id) && form !== 'sheik') return false;
+      if (zeldaOnlyCards.includes(cardDef.id) && form !== 'zelda') return false;
+    }
+    return true;
+  }
   if (cardDef.restriction === 'sidekick') return !fighter.isHero;
   return true;
 }
@@ -502,6 +527,14 @@ function checkStartOfTurnAbility(state: GameState) {
       }
     }
   }
+  // Zelda: Veil of Two Fates — choose form at start of turn
+  if (charDef.id === 'zelda') {
+    const hero = getHero(state, state.currentPlayer);
+    if (hero && hero.hp > 0) {
+      state.phase = 'zelda_formChoice';
+      addLog(state, `Veil of Two Fates: Choose Zelda (Ranged, Move 2, +1 combat value) or Sheik (Melee, Move 3, +1 action).`);
+    }
+  }
   // Sokka's boomerang is used via a button during playing phase, not start of turn
 }
 
@@ -535,6 +568,9 @@ function finishEndTurn(state: GameState) {
   state.mewtwoCloneBatchRemaining = 0;
   state.mewtwoCloneRushCards = [];
   state.mewtwoCloneRushPlayerIndex = null;
+  state.zeldaMovementLock = null;
+  state.zeldaNayrusLoveActive = [false, false];
+  state.zeldaBonusAttackUsed = false;
   state.phase = 'playing';
   addLog(state, `--- ${state.players[state.currentPlayer].name}'s turn ---`);
   recordTurnStartPositions(state);
@@ -1094,6 +1130,283 @@ function continuePrecisionThrowResume(s: GameState): GameState {
   }
 
   return resolveCombatDamage(s);
+}
+
+// ---- Zelda/Sheik ----
+
+/** Resolve form choice at start of turn */
+export function resolveZeldaFormChoice(state: GameState, form: string): GameState {
+  const s = clone(state);
+  const pi = s.currentPlayer;
+  const hero = getHero(s, pi);
+  if (!hero) return s;
+
+  s.zeldaCurrentForm = [...s.zeldaCurrentForm] as [string, string];
+  s.zeldaCurrentForm[pi] = form;
+
+  if (form === 'zelda') {
+    hero.name = 'Zelda';
+    hero.isRanged = true;
+    hero.moveValue = 2;
+    addLog(s, `Zelda form chosen: Ranged, Move 2, +1 combat value (Royal Radiance).`);
+  } else {
+    hero.name = 'Sheik';
+    hero.isRanged = false;
+    hero.moveValue = 3;
+    s.players[pi].actionsRemaining++;
+    addLog(s, `Sheik form chosen: Melee, Move 3, +1 action (Swift Strike).`);
+  }
+
+  // Clear movement lock from previous turn
+  s.zeldaMovementLock = null;
+  s.zeldaBonusAttackUsed = false;
+  s.phase = 'playing';
+  return s;
+}
+
+/** Get spaces in the hero's zone for Farore's Wind */
+export function getZeldaZoneSpaces(state: GameState): string[] {
+  const hero = getHero(state, state.currentPlayer);
+  if (!hero) return [];
+  const heroSpace = getSpace(state.board, hero.spaceId);
+  if (!heroSpace) return [];
+  const heroZones = heroSpace.zones;
+  return state.board.spaces
+    .filter(sp => sp.zones.some(z => heroZones.includes(z)) && !isSpaceOccupied(state, sp.id, hero.id))
+    .map(sp => sp.id);
+}
+
+/** Resolve Farore's Wind: place fighter in any space in their zone */
+export function resolveZeldaFaroresWind(state: GameState, spaceId: string): GameState {
+  const s = clone(state);
+  if (!s.combat) return s;
+  const fighter = getFighter(s, s.combat.attackerId)!.owner === s.currentPlayer
+    ? getFighter(s, s.combat.attackerId)!
+    : getFighter(s, s.combat.defenderId)!;
+  // Validate zone
+  const fighterSpace = getSpace(s.board, fighter.spaceId);
+  if (!fighterSpace) return continueCombatAfterImmediately(s);
+  const zones = fighterSpace.zones;
+  const targetSpace = getSpace(s.board, spaceId);
+  if (!targetSpace || !targetSpace.zones.some(z => zones.includes(z))) return s;
+  if (isSpaceOccupied(s, spaceId, fighter.id)) return s;
+
+  fighter.spaceId = spaceId;
+  addLog(s, `Farore's Wind: ${fighter.name} teleports to ${spaceId}!`);
+  return continueCombatAfterImmediately(s);
+}
+
+/** Skip Farore's Wind */
+export function skipZeldaFaroresWind(state: GameState): GameState {
+  const s = clone(state);
+  addLog(s, `Farore's Wind: Skipped.`);
+  return continueCombatAfterImmediately(s);
+}
+
+/** Resolve Smoke Bomb move */
+export function resolveZeldaSmokeBombMove(state: GameState, spaceId: string): GameState {
+  const s = clone(state);
+  if (!s.combat) return s;
+  // Find which fighter is the Zelda player
+  const attacker = getFighter(s, s.combat.attackerId)!;
+  const defender = getFighter(s, s.combat.defenderId)!;
+  const self = attacker.characterId === 'zelda' ? attacker : defender;
+  const reachable = getReachableSpaces(s.board, self.spaceId, 2, s.fighters, self.id);
+  if (!reachable.includes(spaceId)) return s;
+  self.spaceId = spaceId;
+  addLog(s, `Smoke Bomb: ${self.name} moves to ${spaceId}!`);
+  return continueCombatAfterImmediately(s);
+}
+
+/** Skip Smoke Bomb move */
+export function skipZeldaSmokeBombMove(state: GameState): GameState {
+  const s = clone(state);
+  addLog(s, `Smoke Bomb: Stays in place.`);
+  return continueCombatAfterImmediately(s);
+}
+
+/** Resolve Song of Time: return card from discard to hand */
+export function resolveZeldaSongOfTime(state: GameState, cardId: string): GameState {
+  const s = clone(state);
+  const player = currentPlayer(s);
+  const cardIdx = player.discard.findIndex(c => c.id === cardId);
+  if (cardIdx < 0) return s;
+  const card = player.discard.splice(cardIdx, 1)[0];
+  player.hand.push(card);
+  const charDef = getCharDef(player.characterId);
+  const def = getCardDef(card, charDef);
+  addLog(s, `Song of Time: ${def?.name || 'a card'} returned to hand!`);
+  player.discard.push(s.pendingSchemeCard!);
+  s.pendingSchemeCard = null;
+  if (s.phase !== 'gameOver') useAction(s);
+  return s;
+}
+
+/** Skip Song of Time */
+export function skipZeldaSongOfTime(state: GameState): GameState {
+  const s = clone(state);
+  addLog(s, `Song of Time: No card returned.`);
+  const player = currentPlayer(s);
+  player.discard.push(s.pendingSchemeCard!);
+  s.pendingSchemeCard = null;
+  if (s.phase !== 'gameOver') useAction(s);
+  return s;
+}
+
+/** Resolve Goddess Blade: return card from discard to hand (after combat) */
+export function resolveZeldaGoddessBlade(state: GameState, cardId: string): GameState {
+  const s = clone(state);
+  const player = s.players[s.currentPlayer];
+  const cardIdx = player.discard.findIndex(c => c.id === cardId);
+  if (cardIdx < 0) return s;
+  const card = player.discard.splice(cardIdx, 1)[0];
+  player.hand.push(card);
+  const charDef = getCharDef(player.characterId);
+  const def = getCardDef(card, charDef);
+  addLog(s, `Goddess Blade: ${def?.name || 'a card'} returned to hand!`);
+  return continueEffectQueue(s);
+}
+
+/** Skip Goddess Blade */
+export function skipZeldaGoddessBlade(state: GameState): GameState {
+  const s = clone(state);
+  addLog(s, `Goddess Blade: No card returned.`);
+  return continueEffectQueue(s);
+}
+
+/** Resolve Impa's Training move */
+export function resolveZeldaImpasMove(state: GameState, spaceId: string): GameState {
+  const s = clone(state);
+  const hero = getHero(s, s.currentPlayer);
+  if (!hero) return s;
+  const reachable = getReachableSpaces(s.board, hero.spaceId, 3, s.fighters, hero.id);
+  if (!reachable.includes(spaceId)) return s;
+  hero.spaceId = spaceId;
+  addLog(s, `Impa's Training: ${hero.name} moves to ${spaceId}.`);
+
+  // Now choose adjacent opponent
+  const opponentIndex = s.currentPlayer === 0 ? 1 : 0;
+  const adjacentEnemies = getAliveFighters(s, opponentIndex).filter(f =>
+    areAdjacent(s.board, hero.spaceId, f.spaceId)
+  );
+  if (adjacentEnemies.length > 0) {
+    s.phase = 'zelda_impasTraining_target';
+    addLog(s, `Choose an adjacent opponent to reveal their hand.`);
+  } else {
+    addLog(s, `No adjacent opponents.`);
+    const player = currentPlayer(s);
+    player.discard.push(s.pendingSchemeCard!);
+    s.pendingSchemeCard = null;
+    if (s.phase !== 'gameOver') useAction(s);
+  }
+  return s;
+}
+
+/** Skip Impa's Training move */
+export function skipZeldaImpasMove(state: GameState): GameState {
+  const s = clone(state);
+  addLog(s, `Impa's Training: Stays in place.`);
+  const hero = getHero(s, s.currentPlayer);
+  if (!hero) {
+    const player = currentPlayer(s);
+    player.discard.push(s.pendingSchemeCard!);
+    s.pendingSchemeCard = null;
+    if (s.phase !== 'gameOver') useAction(s);
+    return s;
+  }
+  const opponentIndex = s.currentPlayer === 0 ? 1 : 0;
+  const adjacentEnemies = getAliveFighters(s, opponentIndex).filter(f =>
+    areAdjacent(s.board, hero.spaceId, f.spaceId)
+  );
+  if (adjacentEnemies.length > 0) {
+    s.phase = 'zelda_impasTraining_target';
+    addLog(s, `Choose an adjacent opponent to reveal their hand.`);
+  } else {
+    addLog(s, `No adjacent opponents.`);
+    const player = currentPlayer(s);
+    player.discard.push(s.pendingSchemeCard!);
+    s.pendingSchemeCard = null;
+    if (s.phase !== 'gameOver') useAction(s);
+  }
+  return s;
+}
+
+/** Resolve Impa's Training: choose adjacent opponent */
+export function resolveZeldaImpasTarget(state: GameState, targetFighterId: string): GameState {
+  const s = clone(state);
+  const hero = getHero(s, s.currentPlayer);
+  if (!hero) return s;
+  const target = getFighter(s, targetFighterId);
+  if (!target || target.owner === s.currentPlayer) return s;
+  if (!areAdjacent(s.board, hero.spaceId, target.spaceId)) return s;
+
+  const opponentPlayer = s.players[target.owner];
+  if (opponentPlayer.hand.length === 0) {
+    addLog(s, `${opponentPlayer.name} has no cards in hand.`);
+    const player = currentPlayer(s);
+    player.discard.push(s.pendingSchemeCard!);
+    s.pendingSchemeCard = null;
+    if (s.phase !== 'gameOver') useAction(s);
+    return s;
+  }
+
+  s.zeldaImpasRevealedCards = [...opponentPlayer.hand];
+  s.zeldaImpasTargetPlayer = target.owner;
+  s.phase = 'zelda_impasTraining_discard';
+  addLog(s, `${opponentPlayer.name}'s hand is revealed! Choose 1 card for them to discard.`);
+  return s;
+}
+
+/** Resolve Impa's Training: choose card from revealed hand to discard */
+export function resolveZeldaImpasDiscard(state: GameState, cardId: string): GameState {
+  const s = clone(state);
+  if (s.zeldaImpasTargetPlayer === null) return s;
+  const opponentPlayer = s.players[s.zeldaImpasTargetPlayer];
+  const cardIdx = opponentPlayer.hand.findIndex(c => c.id === cardId);
+  if (cardIdx < 0) return s;
+
+  const card = opponentPlayer.hand.splice(cardIdx, 1)[0];
+  opponentPlayer.discard.push(card);
+  const charDef = getCharDef(opponentPlayer.characterId);
+  const def = getCardDef(card, charDef);
+  addLog(s, `Impa's Training: ${opponentPlayer.name} discards ${def?.name || 'a card'}!`);
+
+  s.zeldaImpasRevealedCards = [];
+  s.zeldaImpasTargetPlayer = null;
+  const player = currentPlayer(s);
+  player.discard.push(s.pendingSchemeCard!);
+  s.pendingSchemeCard = null;
+  if (s.phase !== 'gameOver') useAction(s);
+  return s;
+}
+
+/** Get adjacent opponents for Impa's Training target selection */
+export function getZeldaImpasTargets(state: GameState): Fighter[] {
+  const hero = getHero(state, state.currentPlayer);
+  if (!hero) return [];
+  const opponentIndex = state.currentPlayer === 0 ? 1 : 0;
+  return getAliveFighters(state, opponentIndex).filter(f =>
+    areAdjacent(state.board, hero.spaceId, f.spaceId)
+  );
+}
+
+/** Resolve Din's Fire: deal 1 damage to another opponent in defender's zone */
+export function resolveZeldaDinsFireTarget(state: GameState, targetFighterId: string): GameState {
+  const s = clone(state);
+  const target = getFighter(s, targetFighterId);
+  if (!target || target.hp <= 0) return continueEffectQueue(s);
+
+  target.hp = Math.max(0, target.hp - 1);
+  addLog(s, `Din's Fire: Deals 1 damage to ${target.name}! (${target.hp} HP)`);
+  checkHeroDeath(s);
+  return continueEffectQueue(s);
+}
+
+/** Skip Din's Fire */
+export function skipZeldaDinsFire(state: GameState): GameState {
+  const s = clone(state);
+  addLog(s, `Din's Fire: No valid target.`);
+  return continueEffectQueue(s);
 }
 
 // ---- Yennenga Damage Split ----
@@ -1671,6 +1984,39 @@ function resolveCombat(state: GameState): GameState {
         addLog(s, `Sky Bison Swap: Aang is not the defender, no swap.`);
       }
     }
+    // Zelda: Light Arrow (defender) — form-dependent
+    if (effect.type === 'zeldaLightArrow' && !s.combat.defenderEffectsCancelled) {
+      const form = s.zeldaCurrentForm[defender.owner];
+      if (form === 'zelda') {
+        drawCards(s, defPlayer.index, 1);
+        addLog(s, `Light Arrow: Zelda form — drew 1 card.`);
+      } else if (form === 'sheik') {
+        if (attacker.hp > 0) {
+          attacker.hp = Math.max(0, attacker.hp - 1);
+          addLog(s, `Light Arrow: Sheik form — deals 1 damage to ${attacker.name}! (${attacker.hp} HP)`);
+          checkHeroDeath(s);
+        }
+      }
+    }
+    // Zelda: Sheikah Veil (defender) — lock opponent movement
+    if (effect.type === 'zeldaSheikahVeil' && !s.combat.defenderEffectsCancelled) {
+      s.zeldaMovementLock = attacker.id;
+      addLog(s, `Sheikah Veil: ${attacker.name} cannot leave their space for the rest of this turn!`);
+    }
+    // Zelda: Farore's Wind (defender) — place in zone
+    if (effect.type === 'zeldaFaroresWind' && !s.combat.defenderEffectsCancelled) {
+      s.phase = 'zelda_faroresWind';
+      addLog(s, `Farore's Wind: Place your fighter in any space in your zone.`);
+      return s;
+    }
+    // Zelda: Smoke Bomb (defender) — move up to 2 + cancel opponent effects
+    if (effect.type === 'zeldaSmokeBomb' && !s.combat.defenderEffectsCancelled) {
+      s.combat.attackerEffectsCancelled = true;
+      addLog(s, `Smoke Bomb: All effects on opponent's card are ignored!`);
+      s.phase = 'zelda_smokeBomb_move';
+      addLog(s, `Smoke Bomb: You may move up to 2 spaces.`);
+      return s;
+    }
     // Fan Sweep: push the opposing fighter up to N spaces
     if (effect.type === 'pushFighter' && !s.combat.defenderEffectsCancelled) {
       const pushTarget = attacker; // defender pushes the attacker
@@ -1795,6 +2141,39 @@ function resolveCombat(state: GameState): GameState {
       // Mewtwo: Psychic Barrier — prevent effect damage
       if (effect.type === 'preventEffectDamage') {
         addLog(s, `Psychic Barrier: Effect damage is prevented this combat.`);
+      }
+      // Zelda: Light Arrow (attacker) — form-dependent
+      if (effect.type === 'zeldaLightArrow') {
+        const form = s.zeldaCurrentForm[attacker.owner];
+        if (form === 'zelda') {
+          drawCards(s, atkPlayer.index, 1);
+          addLog(s, `Light Arrow: Zelda form — drew 1 card.`);
+        } else if (form === 'sheik') {
+          if (defender.hp > 0) {
+            defender.hp = Math.max(0, defender.hp - 1);
+            addLog(s, `Light Arrow: Sheik form — deals 1 damage to ${defender.name}! (${defender.hp} HP)`);
+            checkHeroDeath(s);
+          }
+        }
+      }
+      // Zelda: Sheikah Veil (attacker) — lock opponent movement
+      if (effect.type === 'zeldaSheikahVeil') {
+        s.zeldaMovementLock = defender.id;
+        addLog(s, `Sheikah Veil: ${defender.name} cannot leave their space for the rest of this turn!`);
+      }
+      // Zelda: Farore's Wind (attacker) — place in zone
+      if (effect.type === 'zeldaFaroresWind') {
+        s.phase = 'zelda_faroresWind';
+        addLog(s, `Farore's Wind: Place your fighter in any space in your zone.`);
+        return s;
+      }
+      // Zelda: Smoke Bomb (attacker) — move up to 2 + cancel opponent effects
+      if (effect.type === 'zeldaSmokeBomb') {
+        s.combat.defenderEffectsCancelled = true;
+        addLog(s, `Smoke Bomb: All effects on opponent's card are ignored!`);
+        s.phase = 'zelda_smokeBomb_move';
+        addLog(s, `Smoke Bomb: You may move up to 2 spaces.`);
+        return s;
       }
       // Fan Sweep: push the opposing fighter up to N spaces
       if (effect.type === 'pushFighter' && effect.amount) {
@@ -1935,6 +2314,23 @@ function continueCombatAfterImmediately(s: GameState): GameState {
     }
   }
 
+  // Zelda: Nayru's Love (defender) — prevent card-effect damage
+  if (!s.combat.defenderEffectsCancelled && defCardDef) {
+    for (const effect of defDuring) {
+      if (effect.type === 'zeldaNayrusLove') {
+        s.zeldaNayrusLoveActive = [...s.zeldaNayrusLoveActive] as [boolean, boolean];
+        s.zeldaNayrusLoveActive[defender.owner] = true;
+        addLog(s, `Nayru's Love: All card-effect damage to ${defender.name} is prevented this combat!`);
+      }
+      // Zelda: Needle Storm during (defender — versatile used as defense)
+      if (effect.type === 'zeldaNeedleStormDuring') {
+        if (s.zeldaBonusAttackUsed) {
+          addLog(s, `Needle Storm: Made using Bonus Attack — value +2!`);
+        }
+      }
+    }
+  }
+
   // Tesla: check if defender has a during-combat coil effect that needs choice
   if (!s.combat.defenderEffectsCancelled && defCardDef) {
     for (const effect of defCardDef.effects) {
@@ -2014,6 +2410,22 @@ function continueAttackerDuringCombat(s: GameState): GameState {
         s.sokkaBoomerangReady[attacker.owner] = false;
         s.combat!.defenderEffectsCancelled = true;
         addLog(s, `${atkCardDef?.name}: Boomerang flipped to OUT! Value becomes ${effect.amount}, opponent's effects cancelled!`);
+      }
+    }
+  }
+
+  // Zelda: Needle Storm during (attacker) + Nayru's Love (attacker side)
+  if (!s.combat.attackerEffectsCancelled && atkCardDef) {
+    for (const effect of atkDuring) {
+      if (effect.type === 'zeldaNeedleStormDuring') {
+        if (s.zeldaBonusAttackUsed) {
+          addLog(s, `Needle Storm: Made using Bonus Attack — value +2!`);
+        }
+      }
+      if (effect.type === 'zeldaNayrusLove') {
+        s.zeldaNayrusLoveActive = [...s.zeldaNayrusLoveActive] as [boolean, boolean];
+        s.zeldaNayrusLoveActive[attacker.owner] = true;
+        addLog(s, `Nayru's Love: All card-effect damage to ${attacker.name} is prevented this combat!`);
       }
     }
   }
@@ -2238,6 +2650,32 @@ function resolveCombatDamage(state: GameState): GameState {
         }
       }
     }
+  }
+
+  // Zelda: Needle Storm +2 if bonus attack
+  if (!s.combat.attackerEffectsCancelled && atkCardDef) {
+    for (const effect of atkCardDef.effects) {
+      if (effect.timing === 'duringCombat' && effect.type === 'zeldaNeedleStormDuring' && s.zeldaBonusAttackUsed) {
+        atkValue += 2;
+      }
+    }
+  }
+  if (!s.combat.defenderEffectsCancelled && defCardDef) {
+    for (const effect of defCardDef.effects) {
+      if (effect.timing === 'duringCombat' && effect.type === 'zeldaNeedleStormDuring' && s.zeldaBonusAttackUsed) {
+        defValue += 2;
+      }
+    }
+  }
+
+  // Zelda: Royal Radiance +1 combat value (ABILITY effect — cannot be cancelled by card effects like Feint)
+  if (attacker.characterId === 'zelda' && s.zeldaCurrentForm[attacker.owner] === 'zelda') {
+    atkValue += 1;
+    addLog(s, `Royal Radiance: +1 combat value (Zelda form ability)!`);
+  }
+  if (defender.characterId === 'zelda' && s.zeldaCurrentForm[defender.owner] === 'zelda') {
+    defValue += 1;
+    addLog(s, `Royal Radiance: +1 combat value (Zelda form ability)!`);
   }
 
   // Tesla: Apply during-combat coil effects (already resolved via interactive choice)
@@ -2766,6 +3204,105 @@ function processAfterCombatEffect(
       break;
     }
 
+    // ---- Zelda/Sheik after-combat effects ----
+
+    case 'zeldaVanishingStrike': {
+      const form = state.zeldaCurrentForm[selfPlayer.index];
+      if (form === 'sheik' && self.hp > 0) {
+        queue.push({
+          type: 'moveFighter',
+          playerIndex: selfPlayer.index,
+          fighterId: self.id,
+          range: 2,
+          label: `Vanishing Strike (Sheik): Move up to 2 spaces.`,
+        });
+      } else if (form === 'zelda') {
+        drawCards(state, selfPlayer.index, 1);
+        addLog(state, `Vanishing Strike (Zelda): Drew 1 card.`);
+      }
+      break;
+    }
+
+    case 'zeldaHylianGuard': {
+      const form = state.zeldaCurrentForm[selfPlayer.index];
+      if (form === 'zelda') {
+        const hero = getHero(state, selfPlayer.index);
+        if (hero && hero.hp > 0 && hero.hp < hero.maxHp) {
+          hero.hp = Math.min(hero.maxHp, hero.hp + 1);
+          addLog(state, `Hylian Guard (Zelda): Recovers 1 health! (${hero.hp}/${hero.maxHp} HP)`);
+        }
+      } else if (form === 'sheik') {
+        if (opponentPlayer.hand.length > 0) {
+          const randIdx = Math.floor(Math.random() * opponentPlayer.hand.length);
+          const discarded = opponentPlayer.hand.splice(randIdx, 1)[0];
+          opponentPlayer.discard.push(discarded);
+          const charDef = getCharDef(opponentPlayer.characterId);
+          const def = getCardDef(discarded, charDef);
+          addLog(state, `Hylian Guard (Sheik): ${opponentPlayer.name} discards ${def?.name || 'a card'} at random!`);
+        }
+      }
+      break;
+    }
+
+    case 'zeldaDinsFire': {
+      // Deal 1 damage to ANOTHER opposing fighter in the DEFENDING fighter's zone
+      const combat = state.combat;
+      if (combat) {
+        const defenderId = combat.defenderId;
+        const defenderF = getFighter(state, defenderId);
+        if (defenderF) {
+          const opponentIdx = selfPlayer.index === 0 ? 1 : 0;
+          const targets = getAliveFighters(state, opponentIdx).filter(f =>
+            f.id !== defenderId && sameZone(state.board, f.spaceId, defenderF.spaceId)
+          );
+          if (targets.length === 1) {
+            const t = targets[0];
+            t.hp = Math.max(0, t.hp - 1);
+            addLog(state, `Din's Fire: Deals 1 damage to ${t.name}! (${t.hp} HP)`);
+            checkHeroDeath(state);
+          } else if (targets.length > 1) {
+            // Need interactive target selection — use a queued effect
+            queue.push({
+              type: 'zoneDamageTarget',
+              playerIndex: selfPlayer.index,
+              damageAmount: 1,
+              fighterId: defenderId,
+              label: `Din's Fire: Choose another opposing fighter in the defender's zone to deal 1 damage.`,
+            });
+          } else {
+            addLog(state, `Din's Fire: No other opposing fighters in the defender's zone.`);
+          }
+        }
+      }
+      break;
+    }
+
+    case 'zeldaNeedleStormAfter': {
+      // After combat: move 1 space
+      if (self.hp > 0) {
+        queue.push({
+          type: 'moveFighter',
+          playerIndex: selfPlayer.index,
+          fighterId: self.id,
+          range: 1,
+          label: `Needle Storm: Move up to 1 space.`,
+        });
+      }
+      break;
+    }
+
+    case 'zeldaGoddessBlade': {
+      // If won, return up to 1 card from discard to hand (interactive)
+      if (selfWon && selfPlayer.discard.length > 0) {
+        queue.push({
+          type: 'zeldaGoddessBlade',
+          playerIndex: selfPlayer.index,
+          label: `Goddess Blade: Won combat! You may return 1 card from discard to hand.`,
+        });
+      }
+      break;
+    }
+
     // ---- Tesla after-combat effects ----
 
     case 'teslaCoilGainActions': {
@@ -2984,6 +3521,18 @@ function processNextEffect(state: GameState): GameState {
 
     case 'teslaAlternatingChoice': {
       state.phase = 'tesla_alternating_choice';
+      addLog(state, effect.label);
+      break;
+    }
+
+    case 'zeldaGoddessBlade': {
+      state.phase = 'zelda_goddessBlade';
+      addLog(state, effect.label);
+      break;
+    }
+
+    case 'zeldaDinsFireTarget': {
+      state.phase = 'zelda_dinsFireTarget';
       addLog(state, effect.label);
       break;
     }
@@ -3528,6 +4077,31 @@ export function playScheme(state: GameState, cardId: string): GameState {
       }
       player.actionsRemaining++;
       addLog(s, `Remote Control: No opposing fighters to move. Gained 1 action.`);
+      break;
+    }
+
+    // ---- Zelda/Sheik schemes ----
+    case 'zelda_impas_training': {
+      // Move up to 3 spaces, then choose adjacent opponent for hand reveal
+      const hero = getHero(s, s.currentPlayer);
+      if (hero && hero.hp > 0) {
+        s.pendingSchemeCard = card;
+        s.phase = 'zelda_impasTraining_move';
+        addLog(s, `Impa's Training: Move up to 3 spaces.`);
+        return s;
+      }
+      break;
+    }
+
+    case 'zelda_song_of_time': {
+      // Return up to 1 card from discard to hand
+      if (player.discard.length > 0) {
+        s.pendingSchemeCard = card;
+        s.phase = 'zelda_songOfTime';
+        addLog(s, `Song of Time: Choose a card from your discard pile to return to hand, or skip.`);
+        return s;
+      }
+      addLog(s, `Song of Time: No cards in discard pile.`);
       break;
     }
 

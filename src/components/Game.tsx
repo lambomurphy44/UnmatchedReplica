@@ -13,6 +13,12 @@ import {
   getValidPlacementSpaces,
   getMewtwoAdjacentSpaces,
   getTeleportSpaces,
+  getZeldaZoneSpaces,
+  getZeldaImpasTargets,
+  getCardDef,
+  getHero,
+  getAliveFighters,
+  sameZone,
 } from '../game/engine';
 import { dispatchAction } from '../game/dispatch';
 import { Board } from './Board';
@@ -178,6 +184,14 @@ export const Game: React.FC = () => {
       return gs.currentPlayer === myIndex;
     }
 
+    // Zelda combat phases: the Zelda player controls (may be defender)
+    if ((gs.phase === 'zelda_faroresWind' || gs.phase === 'zelda_smokeBomb_move') && gs.combat) {
+      const atk = getFighter(gs, gs.combat.attackerId);
+      const def = getFighter(gs, gs.combat.defenderId);
+      if (atk?.characterId === 'zelda') return atk.owner === myIndex;
+      if (def?.characterId === 'zelda') return def.owner === myIndex;
+    }
+
     // Tesla coil choice: the Tesla player controls (may be defender)
     if (gs.phase === 'tesla_coilChoice' && gs.combat) {
       const atk = getFighter(gs, gs.combat.attackerId);
@@ -305,6 +319,35 @@ export const Game: React.FC = () => {
       act('resolveTeslaOverflowPush', { spaceId });
       return;
     }
+    // Zelda phases
+    if (gs.phase === 'zelda_faroresWind') {
+      act('resolveZeldaFaroresWind', { spaceId });
+      return;
+    }
+    if (gs.phase === 'zelda_smokeBomb_move') {
+      act('resolveZeldaSmokeBombMove', { spaceId });
+      return;
+    }
+    if (gs.phase === 'zelda_impasTraining_move') {
+      act('resolveZeldaImpasMove', { spaceId });
+      return;
+    }
+    if (gs.phase === 'zelda_impasTraining_target') {
+      const targets = getZeldaImpasTargets(gs);
+      const targetOnSpace = targets.find(t => t.spaceId === spaceId);
+      if (targetOnSpace) {
+        act('resolveZeldaImpasTarget', { targetFighterId: targetOnSpace.id });
+      }
+      return;
+    }
+    if (gs.phase === 'zelda_dinsFireTarget') {
+      // Find valid targets: opponent fighters in defender's zone, excluding the defender
+      const fighters = gs.fighters.filter(f => f.spaceId === spaceId && f.hp > 0);
+      if (fighters.length > 0) {
+        act('resolveZeldaDinsFireTarget', { targetFighterId: fighters[0].id });
+      }
+      return;
+    }
     // Mewtwo phases
     if (gs.phase === 'mewtwo_placeClone' || gs.phase === 'mewtwo_cloneBatch_place') {
       act('placeClone', { spaceId });
@@ -367,6 +410,21 @@ export const Game: React.FC = () => {
     // Mewtwo: Clone Rush — choose card from opponent's hand
     if (gs.phase === 'mewtwo_cloneRush_discard') {
       act('resolveCloneRushDiscard', { cardId });
+      return;
+    }
+    // Zelda: Song of Time — choose card from discard
+    if (gs.phase === 'zelda_songOfTime') {
+      act('resolveZeldaSongOfTime', { cardId });
+      return;
+    }
+    // Zelda: Goddess Blade — choose card from discard
+    if (gs.phase === 'zelda_goddessBlade') {
+      act('resolveZeldaGoddessBlade', { cardId });
+      return;
+    }
+    // Zelda: Impa's Training — choose card from revealed hand
+    if (gs.phase === 'zelda_impasTraining_discard') {
+      act('resolveZeldaImpasDiscard', { cardId });
       return;
     }
   }, [gs, canInteract, act]);
@@ -450,6 +508,32 @@ export const Game: React.FC = () => {
     }
     if (gs.phase === 'mewtwo_teleport_move') {
       return getTeleportSpaces(gs);
+    }
+    // Zelda phases
+    if (gs.phase === 'zelda_faroresWind') {
+      return getZeldaZoneSpaces(gs);
+    }
+    if (gs.phase === 'zelda_smokeBomb_move' && gs.combat) {
+      const atk = getFighter(gs, gs.combat.attackerId);
+      const def = getFighter(gs, gs.combat.defenderId);
+      const self = atk?.characterId === 'zelda' ? atk : def;
+      if (self) return getReachableSpaces(gs.board, self.spaceId, 2, gs.fighters, self.id);
+    }
+    if (gs.phase === 'zelda_impasTraining_move') {
+      const hero = getHero(gs, gs.currentPlayer);
+      if (hero) return getReachableSpaces(gs.board, hero.spaceId, 3, gs.fighters, hero.id);
+    }
+    if (gs.phase === 'zelda_impasTraining_target') {
+      return getZeldaImpasTargets(gs).map(t => t.spaceId);
+    }
+    if (gs.phase === 'zelda_dinsFireTarget' && gs.combat) {
+      const defender = getFighter(gs, gs.combat.defenderId);
+      if (defender) {
+        const opponentIdx = gs.currentPlayer === 0 ? 1 : 0;
+        return getAliveFighters(gs, opponentIdx)
+          .filter(f => f.id !== gs.combat!.defenderId && sameZone(gs.board, f.spaceId, defender.spaceId))
+          .map(f => f.spaceId);
+      }
     }
     return [];
   })();
@@ -948,6 +1032,145 @@ export const Game: React.FC = () => {
           </div>
           <button className="skip-btn" onClick={() => act('skipSchemeMoveAllFighter')}>
             Skip Move
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'zelda_formChoice' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Veil of Two Fates: Choose your form for this turn.
+          </div>
+          <button className="action-btn" onClick={() => act('resolveZeldaFormChoice', { form: 'zelda' })}>
+            Zelda (Ranged, Move 2, +1 Value)
+          </button>
+          <button className="action-btn" onClick={() => act('resolveZeldaFormChoice', { form: 'sheik' })}>
+            Sheik (Melee, Move 3, +1 Action)
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'zelda_faroresWind' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Farore's Wind: Click a space in your zone to teleport, or skip.
+          </div>
+          <button className="skip-btn" onClick={() => act('skipZeldaFaroresWind')}>
+            Skip
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'zelda_smokeBomb_move' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Smoke Bomb: Move up to 2 spaces, or skip.
+          </div>
+          <button className="skip-btn" onClick={() => act('skipZeldaSmokeBombMove')}>
+            Skip Move
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'zelda_impasTraining_move' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Impa's Training: Move up to 3 spaces, or skip.
+          </div>
+          <button className="skip-btn" onClick={() => act('skipZeldaImpasMove')}>
+            Skip Move
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'zelda_impasTraining_target' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Impa's Training: Click an adjacent opponent to reveal their hand.
+          </div>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'zelda_impasTraining_discard' && (() => {
+        const revealed = gs.zeldaImpasRevealedCards;
+        const targetPlayer = gs.zeldaImpasTargetPlayer !== null ? gs.players[gs.zeldaImpasTargetPlayer] : null;
+        const targetCharDef = targetPlayer ? getCharDef(targetPlayer.characterId) : null;
+        return (
+          <div className="phase-prompt">
+            <div className="phase-text">
+              {targetPlayer?.name}'s hand revealed! Choose 1 card for them to discard.
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+              {revealed.map(card => {
+                const def = targetCharDef ? getCardDef(card, targetCharDef) : null;
+                return (
+                  <button key={card.id} className="action-btn" onClick={() => act('resolveZeldaImpasDiscard', { cardId: card.id })}>
+                    {def?.name || 'Unknown'} ({def?.type})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {canInteract && gs.phase === 'zelda_songOfTime' && (() => {
+        const cp = currentPlayer(gs);
+        const charDef = getCharDef(cp.characterId);
+        return (
+          <div className="phase-prompt">
+            <div className="phase-text">
+              Song of Time: Choose a card from your discard to return to hand, or skip.
+            </div>
+            <button className="skip-btn" onClick={() => act('skipZeldaSongOfTime')}>
+              Skip
+            </button>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+              {cp.discard.map(card => {
+                const def = getCardDef(card, charDef);
+                return (
+                  <button key={card.id} className="action-btn" onClick={() => act('resolveZeldaSongOfTime', { cardId: card.id })}>
+                    {def?.name || 'Unknown'}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {canInteract && gs.phase === 'zelda_goddessBlade' && (() => {
+        const cp = gs.players[gs.currentPlayer];
+        const charDef = getCharDef(cp.characterId);
+        return (
+          <div className="phase-prompt">
+            <div className="phase-text">
+              Goddess Blade: Return 1 card from discard to hand, or skip.
+            </div>
+            <button className="skip-btn" onClick={() => act('skipZeldaGoddessBlade')}>
+              Skip
+            </button>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+              {cp.discard.map(card => {
+                const def = getCardDef(card, charDef);
+                return (
+                  <button key={card.id} className="action-btn" onClick={() => act('resolveZeldaGoddessBlade', { cardId: card.id })}>
+                    {def?.name || 'Unknown'}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {canInteract && gs.phase === 'zelda_dinsFireTarget' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Din's Fire: Click another opposing fighter in the defender's zone to deal 1 damage.
+          </div>
+          <button className="skip-btn" onClick={() => act('skipZeldaDinsFire')}>
+            Skip
           </button>
         </div>
       )}

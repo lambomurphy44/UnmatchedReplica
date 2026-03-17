@@ -82,6 +82,20 @@ export const PlayerHUD: React.FC<PlayerHUDProps> = ({ state, playerIndex, isActi
           Boomerang: {state.sokkaBoomerangReady[playerIndex] ? 'READY' : 'OUT'}
         </div>
       )}
+      {player.characterId === 'zelda' && (
+        <div style={{
+          padding: '4px 8px',
+          margin: '4px 0',
+          borderRadius: '4px',
+          background: state.zeldaCurrentForm[playerIndex] === 'sheik' ? '#5c6bc0' : '#ab47bc',
+          color: '#fff',
+          fontWeight: 'bold',
+          fontSize: '0.85em',
+          textAlign: 'center',
+        }}>
+          Form: {state.zeldaCurrentForm[playerIndex] === 'sheik' ? 'SHEIK (Melee, Move 3)' : 'ZELDA (Ranged, Move 2)'}
+        </div>
+      )}
       {player.characterId === 'tesla' && (
         <div style={{
           padding: '4px 8px',

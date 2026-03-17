@@ -138,11 +138,20 @@ export type Phase =
   | 'tesla_repulsion_selfMove' // Tesla: move Tesla for Repulsion Blast (1 coil)
   | 'tesla_alternating_choice' // Tesla: choose charge or discharge for Alternating Current
   | 'tesla_remote_control'     // Tesla: move opposing fighters for Remote Control
+  | 'zelda_formChoice'         // Zelda: choose Zelda or Sheik form
+  | 'zelda_faroresWind'        // Zelda: place fighter in any space in your zone
+  | 'zelda_impasTraining_move' // Zelda: Impa's Training — move up to 3 spaces
+  | 'zelda_impasTraining_target' // Zelda: Impa's Training — choose adjacent opponent
+  | 'zelda_impasTraining_discard' // Zelda: Impa's Training — choose card from revealed hand
+  | 'zelda_songOfTime'         // Zelda: Song of Time — choose card from discard to return
+  | 'zelda_goddessBlade'       // Zelda: Goddess Blade — choose card from discard to return
+  | 'zelda_smokeBomb_move'     // Zelda: Smoke Bomb — move up to 2 spaces
+  | 'zelda_dinsFireTarget'     // Zelda: Din's Fire — choose target in zone
   | 'discard_excess'
   | 'gameOver';
 
 export interface QueuedEffect {
-  type: 'moveFighter' | 'opponentDiscard' | 'placeFighter' | 'pushFighter' | 'zoneDamage' | 'zoneDamageTarget' | 'teslaCoilChoice' | 'teslaAlternatingChoice';
+  type: 'moveFighter' | 'opponentDiscard' | 'placeFighter' | 'pushFighter' | 'zoneDamage' | 'zoneDamageTarget' | 'teslaCoilChoice' | 'teslaAlternatingChoice' | 'zeldaGoddessBlade' | 'zeldaDinsFireTarget';
   playerIndex: number;
   damageAmount?: number;  // for zoneDamage: how much damage to deal
   fighterId?: string;
@@ -245,6 +254,14 @@ export interface GameState {
   teslaCoilRevealedCard: { defId: string; boost: number } | null; // X-Ray Radiation revealed card
   teslaCoilChoiceContext: 'immediately' | 'duringCombat_atk' | 'duringCombat_def' | 'afterCombat' | null;
   teslaOverflowPushTargets: string[]; // fighter IDs to push during overflow
+
+  // Zelda/Sheik-specific
+  zeldaCurrentForm: [string, string]; // per player: 'zelda' or 'sheik'
+  zeldaMovementLock: string | null;   // fighter ID locked from moving (Sheikah Veil)
+  zeldaNayrusLoveActive: [boolean, boolean]; // per player: prevent card-effect damage this combat
+  zeldaImpasRevealedCards: Card[];    // revealed hand for Impa's Training
+  zeldaImpasTargetPlayer: number | null; // which player's hand is revealed
+  zeldaBonusAttackUsed: boolean;      // track if attack was a bonus attack (for Needle Storm)
 
   // Yennenga damage splitting
   yennengaDamageSplit: {
