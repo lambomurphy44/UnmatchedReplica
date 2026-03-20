@@ -15,6 +15,11 @@ import {
   resolveReviveHarpy,
   discardExcessCard,
   useMedusaGaze, skipMedusaGaze,
+  useGenieAbility, skipGenieAbility,
+  useGenieWishCommand, skipGenieWishCommand,
+  useGenieImprisonedWrath, skipGenieImprisonedWrath,
+  resolveGenieSultansDiscard,
+  resolveGenieThreeWishes,
   placeSidekick,
   useCloneVats, skipCloneVats,
   placeClone, skipClonePlacement,
@@ -52,6 +57,23 @@ export function dispatchAction(state: GameState, actionType: string, args: Recor
         return useMedusaGaze(state, args.targetFighterId as string);
       case 'skipMedusaGaze':
         return skipMedusaGaze(state);
+      // Genie actions
+      case 'useGenieAbility':
+        return useGenieAbility(state, args.cardId as string);
+      case 'skipGenieAbility':
+        return skipGenieAbility(state);
+      case 'useGenieWishCommand':
+        return useGenieWishCommand(state);
+      case 'skipGenieWishCommand':
+        return skipGenieWishCommand(state);
+      case 'useGenieImprisonedWrath':
+        return useGenieImprisonedWrath(state, args.targetFighterId as string);
+      case 'skipGenieImprisonedWrath':
+        return skipGenieImprisonedWrath(state);
+      case 'resolveGenieSultansDiscard':
+        return resolveGenieSultansDiscard(state, args.cardId as string);
+      case 'resolveGenieThreeWishes':
+        return resolveGenieThreeWishes(state, args.choice as string);
       case 'startManeuver':
         return startManeuver(state);
       case 'applyManeuverBoost':

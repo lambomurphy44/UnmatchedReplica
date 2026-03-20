@@ -21,6 +21,7 @@ import sukiPortrait from '../assets/Suki.png';
 import teslaPortrait from '../assets/Tesla.png';
 import zeldaPortrait from '../assets/Zelda.png';
 import sheikPortrait from '../assets/Sheik.png';
+import geniePortrait from '../assets/Genie.png';
 
 
 interface BoardProps {
@@ -75,6 +76,9 @@ function getPortrait(f: Fighter): string {
   if (f.characterId === 'zelda') {
     // Form-dependent portrait — check name since it's updated on form switch
     return f.name === 'Sheik' ? sheikPortrait : zeldaPortrait;
+  }
+  if (f.characterId === 'genie') {
+    return geniePortrait;
   }
 
   if (f.isHero) return medusaPortrait;

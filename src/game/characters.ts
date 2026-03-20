@@ -1590,4 +1590,183 @@ export const ZELDA: CharacterDef = {
   },
 };
 
-export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA, AANG, MEWTWO, YENNENGA, SOKKA, TESLA, ZELDA];
+// =============================================
+// GENIE — 30 cards (no sidekick)
+// =============================================
+
+const genieCards: CardDef[] = [
+  // ---- Attack cards ----
+  {
+    id: 'genie_careful_wish',
+    name: 'Careful What You Wish For',
+    type: 'attack',
+    value: 4,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'dealDamageIfLostAdjacent', timing: 'afterCombat', amount: 1 },
+    ],
+    effectText: 'AFTER COMBAT: If you lost, deal 1 damage to an adjacent enemy.',
+  },
+  {
+    id: 'genie_wish_command',
+    name: 'Your Wish Is My Command',
+    type: 'attack',
+    value: 3,
+    boost: 1,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'genieWishCommand', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: If you won, you may discard 2 cards to take 1 extra action.',
+  },
+  {
+    id: 'genie_i_am_freed',
+    name: 'I Am Freed',
+    type: 'attack',
+    value: 3,
+    boost: 2,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'genieFreed', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: Move the Genie to any empty space, then deal 1 damage to every fighter next to the Genie.',
+  },
+  {
+    id: 'genie_imprisoned_wrath',
+    name: 'Imprisoned Wrath',
+    type: 'attack',
+    value: 3,
+    boost: 1,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'genieImprisonedWrath', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: You may discard 2 cards to deal 2 damage to an adjacent enemy.',
+  },
+  // ---- Defense cards ----
+  {
+    id: 'genie_back_in_lamp',
+    name: 'Back in the Lamp',
+    type: 'defense',
+    value: 0,
+    boost: 1,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'healSelf', timing: 'immediately', amount: 4 },
+    ],
+    effectText: 'IMMEDIATELY: Recover 4 health.',
+  },
+  {
+    id: 'genie_prisoners_torment',
+    name: "Prisoner's Torment",
+    type: 'defense',
+    value: 1,
+    boost: 2,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'drawPerDamageTaken', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: Draw cards equal to the combat damage you took.',
+  },
+  // ---- Scheme cards ----
+  {
+    id: 'genie_three_wishes',
+    name: 'Three Wishes',
+    type: 'scheme',
+    value: 0,
+    boost: 3,
+    restriction: 'any',
+    quantity: 3,
+    effects: [],
+    effectText: 'Gain 1 action. Then choose one: draw 5 cards; your cards have value 4 for the rest of the turn; or your opponent discards 2 cards.',
+  },
+  // ---- Versatile cards ----
+  {
+    id: 'genie_wishing_more',
+    name: 'Wishing for More Wishes',
+    type: 'versatile',
+    value: 3,
+    boost: 2,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'genieWishingMore', timing: 'afterCombat' },
+    ],
+    effectText: 'AFTER COMBAT: Your opponent draws 1 card, then you draw 3 cards.',
+  },
+  {
+    id: 'genie_i_grant_death',
+    name: 'I Grant You\u2026 Death',
+    type: 'versatile',
+    value: 2,
+    boost: 1,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'genieDealDamageAdjacent', timing: 'afterCombat', amount: 1 },
+    ],
+    effectText: 'AFTER COMBAT: You may deal 1 damage to an adjacent fighter.',
+  },
+  {
+    id: 'genie_feint',
+    name: 'Feint',
+    type: 'versatile',
+    value: 2,
+    boost: 1,
+    restriction: 'any',
+    quantity: 3,
+    effects: [
+      { type: 'cancelEffects', timing: 'immediately' },
+    ],
+    effectText: 'IMMEDIATELY: Cancel all effects on the opposing card.',
+  },
+  {
+    id: 'genie_sultans',
+    name: "I've Made Sultans Out of Less",
+    type: 'versatile',
+    value: 2,
+    boost: 1,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'genieSultansView', timing: 'afterCombat' },
+    ],
+    effectText: "AFTER COMBAT: Look at your opponent's hand and choose a card for them to discard.",
+  },
+  {
+    id: 'genie_parlor_trick',
+    name: 'This Is No Parlor Trick',
+    type: 'versatile',
+    value: 1,
+    boost: 2,
+    restriction: 'any',
+    quantity: 2,
+    effects: [
+      { type: 'genieParlorTrick', timing: 'duringCombat' },
+    ],
+    effectText: 'DURING COMBAT: Treat the opposing card\'s value as its boost number instead of its normal combat value.',
+  },
+];
+
+export const GENIE: CharacterDef = {
+  id: 'genie',
+  name: 'Genie',
+  hp: 16,
+  isRanged: true,
+  moveValue: 3,
+  deckCards: genieCards,
+  ability: {
+    name: 'Three Rules',
+    description: 'At the start of your turn, you may discard 1 card to gain 1 extra action this turn.',
+    timing: 'startOfTurn',
+  },
+};
+
+export const ALL_CHARACTERS: CharacterDef[] = [KING_ARTHUR, MEDUSA, AANG, MEWTWO, YENNENGA, SOKKA, TESLA, ZELDA, GENIE];

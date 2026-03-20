@@ -96,6 +96,11 @@ export type Phase =
   | 'characterSelect'
   | 'place_sidekick'
   | 'playing'
+  | 'genie_startAbility'    // Genie: discard a card to gain 1 extra action
+  | 'genie_threeWishes'     // Genie: choose one of 3 wish options
+  | 'genie_imprisoned_wrath' // Genie: optionally discard 2 for 2 damage
+  | 'genie_wish_command'    // Genie: optionally discard 2 for 1 extra action
+  | 'genie_sultans_discard' // Genie: view opponent's hand and choose card to discard
   | 'medusa_startAbility'
   | 'maneuver_boost'
   | 'maneuver_selectFighter'
@@ -151,7 +156,7 @@ export type Phase =
   | 'gameOver';
 
 export interface QueuedEffect {
-  type: 'moveFighter' | 'opponentDiscard' | 'placeFighter' | 'pushFighter' | 'zoneDamage' | 'zoneDamageTarget' | 'teslaCoilChoice' | 'teslaAlternatingChoice' | 'zeldaGoddessBlade' | 'zeldaDinsFireTarget';
+  type: 'moveFighter' | 'opponentDiscard' | 'placeFighter' | 'pushFighter' | 'zoneDamage' | 'zoneDamageTarget' | 'teslaCoilChoice' | 'teslaAlternatingChoice' | 'zeldaGoddessBlade' | 'zeldaDinsFireTarget' | 'genieFreedDamage' | 'genieWishCommand' | 'genieImprisonedWrath' | 'genieSultansDiscard';
   playerIndex: number;
   damageAmount?: number;  // for zoneDamage: how much damage to deal
   fighterId?: string;
@@ -254,6 +259,12 @@ export interface GameState {
   teslaCoilRevealedCard: { defId: string; boost: number } | null; // X-Ray Radiation revealed card
   teslaCoilChoiceContext: 'immediately' | 'duringCombat_atk' | 'duringCombat_def' | 'afterCombat' | null;
   teslaOverflowPushTargets: string[]; // fighter IDs to push during overflow
+
+  // Genie-specific
+  genieThreeWishesValueLock: [boolean, boolean]; // per player: cards have value 4 for rest of turn
+  geniePendingFreedDamage: boolean; // "I Am Freed" — deal 1 damage to all adjacents after placement
+  genieSultansRevealedCards: Card[]; // opponent's hand shown for Sultans choice
+  genieSultansTargetPlayer: number | null; // which player's hand is being viewed
 
   // Zelda/Sheik-specific
   zeldaCurrentForm: [string, string]; // per player: 'zelda' or 'sheik'
