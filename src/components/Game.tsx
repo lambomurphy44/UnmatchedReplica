@@ -348,6 +348,15 @@ export const Game: React.FC = () => {
       }
       return;
     }
+    // Genie: Imprisoned Wrath — click adjacent enemy to deal damage
+    if (gs.phase === 'genie_imprisoned_wrath') {
+      const opponentIdx = gs.currentPlayer === 0 ? 1 : 0;
+      const target = gs.fighters.find(f => f.spaceId === spaceId && f.owner === opponentIdx && f.hp > 0);
+      if (target) {
+        act('useGenieImprisonedWrath', { targetFighterId: target.id });
+      }
+      return;
+    }
     // Mewtwo phases
     if (gs.phase === 'mewtwo_placeClone' || gs.phase === 'mewtwo_cloneBatch_place') {
       act('placeClone', { spaceId });
@@ -425,6 +434,16 @@ export const Game: React.FC = () => {
     // Zelda: Impa's Training — choose card from revealed hand
     if (gs.phase === 'zelda_impasTraining_discard') {
       act('resolveZeldaImpasDiscard', { cardId });
+      return;
+    }
+    // Genie: Three Rules (start of turn) — click card to discard for extra action
+    if (gs.phase === 'genie_startAbility') {
+      act('useGenieAbility', { cardId });
+      return;
+    }
+    // Genie: Sultans — choose card from revealed opponent hand to discard
+    if (gs.phase === 'genie_sultans_discard') {
+      act('resolveGenieSultansDiscard', { cardId });
       return;
     }
   }, [gs, canInteract, act]);
@@ -535,6 +554,16 @@ export const Game: React.FC = () => {
           .map(f => f.spaceId);
       }
     }
+    // Genie: Imprisoned Wrath — highlight adjacent enemy spaces
+    if (gs.phase === 'genie_imprisoned_wrath') {
+      const hero = getHero(gs, gs.currentPlayer);
+      if (hero) {
+        const opponentIdx = gs.currentPlayer === 0 ? 1 : 0;
+        return getAliveFighters(gs, opponentIdx)
+          .filter(f => gs.board.spaces.find(s => s.id === hero.spaceId)?.adjacentIds.includes(f.spaceId))
+          .map(f => f.spaceId);
+      }
+    }
     return [];
   })();
 
@@ -596,6 +625,20 @@ export const Game: React.FC = () => {
         );
       }
 
+      // Genie: Sultans — show opponent's hand to the Genie player
+      if (gs.phase === 'genie_sultans_discard' && gs.genieSultansTargetPlayer !== null && gs.currentPlayer === myIndex) {
+        const sultansTargetPlayer = gs.players[gs.genieSultansTargetPlayer];
+        const sultansCharDef = getCharDef(sultansTargetPlayer.characterId);
+        return (
+          <CardHand
+            hand={gs.genieSultansRevealedCards}
+            charDef={sultansCharDef}
+            onCardClick={handleCardClick}
+            label={`${sultansTargetPlayer.name}'s Hand (Choose a card for them to discard)`}
+          />
+        );
+      }
+
       // Default: show my hand
       const myAliveFighters = gs.fighters.filter(f => f.owner === myIndex && f.hp > 0);
       const attackerFighter = gs.combat && gs.phase === 'attack_selectCard' && gs.currentPlayer === myIndex
@@ -649,6 +692,19 @@ export const Game: React.FC = () => {
           charDef={opponentCharDef}
           onCardClick={handleCardClick}
           label={`${opponentPlayer.name}'s Hand (Choose a card to discard)`}
+        />
+      );
+    }
+    // Genie: Sultans — show opponent's revealed hand for current player to choose a card to discard
+    if (gs.phase === 'genie_sultans_discard' && gs.genieSultansTargetPlayer !== null) {
+      const sultansTargetPlayer = gs.players[gs.genieSultansTargetPlayer];
+      const sultansCharDef = getCharDef(sultansTargetPlayer.characterId);
+      return (
+        <CardHand
+          hand={gs.genieSultansRevealedCards}
+          charDef={sultansCharDef}
+          onCardClick={handleCardClick}
+          label={`${sultansTargetPlayer.name}'s Hand (Choose a card for them to discard)`}
         />
       );
     }
@@ -925,6 +981,67 @@ export const Game: React.FC = () => {
           <button className="skip-btn" onClick={() => act('skipMedusaGaze')}>
             Skip Gaze
           </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'genie_startAbility' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Three Rules: Click a card in your hand to discard it and gain 1 extra action this turn, or skip.
+          </div>
+          <button className="skip-btn" onClick={() => act('skipGenieAbility')}>
+            Skip
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'genie_threeWishes' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Three Wishes: Choose one wish.
+          </div>
+          <button className="action-btn" onClick={() => act('resolveGenieThreeWishes', { choice: 'draw5' })}>
+            Draw 5 Cards
+          </button>
+          <button className="action-btn" onClick={() => act('resolveGenieThreeWishes', { choice: 'valueLock' })}>
+            Cards Have Value 4 This Turn
+          </button>
+          <button className="action-btn" onClick={() => act('resolveGenieThreeWishes', { choice: 'opponentDiscard' })}>
+            Opponent Discards 2 Cards
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'genie_wish_command' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Your Wish Is My Command: You won! Discard 2 cards to take 1 extra action?
+          </div>
+          <button className="action-btn" onClick={() => act('useGenieWishCommand')}>
+            Discard 2 Cards for +1 Action
+          </button>
+          <button className="skip-btn" onClick={() => act('skipGenieWishCommand')}>
+            Skip
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'genie_imprisoned_wrath' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            Imprisoned Wrath: Click an adjacent enemy, or skip. Costs 2 cards to deal 2 damage.
+          </div>
+          <button className="skip-btn" onClick={() => act('skipGenieImprisonedWrath')}>
+            Skip
+          </button>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'genie_sultans_discard' && (
+        <div className="phase-prompt">
+          <div className="phase-text">
+            I've Made Sultans Out of Less: Click a card from the revealed hand to force your opponent to discard it.
+          </div>
         </div>
       )}
 

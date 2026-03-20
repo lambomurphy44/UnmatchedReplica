@@ -171,6 +171,10 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
     zeldaImpasRevealedCards: [],
     zeldaImpasTargetPlayer: null,
     zeldaBonusAttackUsed: false,
+    genieThreeWishesValueLock: [false, false],
+    geniePendingFreedDamage: false,
+    genieSultansRevealedCards: [],
+    genieSultansTargetPlayer: null,
   };
 
   if (needsPlacement) {
@@ -535,6 +539,15 @@ function checkStartOfTurnAbility(state: GameState) {
       addLog(state, `Veil of Two Fates: Choose Zelda (Ranged, Move 2, +1 combat value) or Sheik (Melee, Move 3, +1 action).`);
     }
   }
+  // Genie: Three Rules — at start of turn, may discard 1 card for 1 extra action
+  if (charDef.id === 'genie') {
+    const player = state.players[state.currentPlayer];
+    const hero = getHero(state, state.currentPlayer);
+    if (hero && hero.hp > 0 && player.hand.length > 0) {
+      state.phase = 'genie_startAbility';
+      addLog(state, `Three Rules: You may discard 1 card to gain 1 extra action this turn.`);
+    }
+  }
   // Sokka's boomerang is used via a button during playing phase, not start of turn
 }
 
@@ -571,6 +584,12 @@ function finishEndTurn(state: GameState) {
   state.zeldaMovementLock = null;
   state.zeldaNayrusLoveActive = [false, false];
   state.zeldaBonusAttackUsed = false;
+  // Reset Three Wishes value lock for the player whose turn just ended
+  const prevPlayer = state.currentPlayer === 0 ? 1 : 0;
+  if (state.genieThreeWishesValueLock[prevPlayer]) {
+    state.genieThreeWishesValueLock = [...state.genieThreeWishesValueLock] as [boolean, boolean];
+    state.genieThreeWishesValueLock[prevPlayer] = false;
+  }
   state.phase = 'playing';
   addLog(state, `--- ${state.players[state.currentPlayer].name}'s turn ---`);
   recordTurnStartPositions(state);
@@ -633,6 +652,30 @@ export function useMedusaGaze(state: GameState, targetFighterId: string): GameSt
 export function skipMedusaGaze(state: GameState): GameState {
   const s = clone(state);
   addLog(s, `Medusa does not use her gaze.`);
+  s.phase = 'playing';
+  return s;
+}
+
+// ---- Genie Start-of-Turn Ability ----
+
+export function useGenieAbility(state: GameState, cardId: string): GameState {
+  const s = clone(state);
+  const player = s.players[s.currentPlayer];
+  const cardIdx = player.hand.findIndex(c => c.id === cardId);
+  if (cardIdx < 0) return s;
+  const card = player.hand.splice(cardIdx, 1)[0];
+  player.discard.push(card);
+  const charDef = getCharDef(player.characterId);
+  const def = getCardDef(card, charDef);
+  player.actionsRemaining++;
+  addLog(s, `Three Rules: Discarded ${def?.name || 'a card'} to gain 1 extra action!`);
+  s.phase = 'playing';
+  return s;
+}
+
+export function skipGenieAbility(state: GameState): GameState {
+  const s = clone(state);
+  addLog(s, `Genie skips Three Rules.`);
   s.phase = 'playing';
   return s;
 }
@@ -2028,6 +2071,14 @@ function resolveCombat(state: GameState): GameState {
         return s;
       }
     }
+    // Genie: Back in the Lamp — recover health immediately (defense card)
+    if (effect.type === 'healSelf' && !s.combat.defenderEffectsCancelled) {
+      if (defender.hp > 0 && effect.amount && effect.amount > 0) {
+        const healed = Math.min(effect.amount, defender.maxHp - defender.hp);
+        defender.hp = Math.min(defender.maxHp, defender.hp + effect.amount);
+        addLog(s, `${defCardDef?.name}: ${defender.name} recovers ${healed} health! (${defender.hp}/${defender.maxHp} HP)`);
+      }
+    }
   }
 
   // Process attacker's IMMEDIATELY effects (only if not cancelled)
@@ -2414,6 +2465,24 @@ function continueAttackerDuringCombat(s: GameState): GameState {
     }
   }
 
+  // Genie: This Is No Parlor Trick — log the effect (handled in damage calc)
+  if (!s.combat.attackerEffectsCancelled && atkCardDef) {
+    for (const effect of atkDuring) {
+      if (effect.type === 'genieParlorTrick') {
+        const defCardDefLocal = s.combat.defenseCard ? getCardDef(s.combat.defenseCard, getCharDef(s.players[defender.owner].characterId)) : null;
+        addLog(s, `This Is No Parlor Trick: The opposing card's value is treated as its boost number (${defCardDefLocal?.boost ?? 0})!`);
+      }
+    }
+  }
+  if (!s.combat.defenderEffectsCancelled && defCardDef) {
+    const defDuringLocal = defCardDef.effects.filter(e => e.timing === 'duringCombat');
+    for (const effect of defDuringLocal) {
+      if (effect.type === 'genieParlorTrick') {
+        addLog(s, `This Is No Parlor Trick: The opposing card's value is treated as its boost number (${atkCardDef?.boost ?? 0})!`);
+      }
+    }
+  }
+
   // Zelda: Needle Storm during (attacker) + Nayru's Love (attacker side)
   if (!s.combat.attackerEffectsCancelled && atkCardDef) {
     for (const effect of atkDuring) {
@@ -2481,6 +2550,25 @@ function resolveCombatDamage(state: GameState): GameState {
   // ===== Calculate values =====
   let atkValue = atkCardDef?.value || 0;
   let defValue = defCardDef?.value || 0;
+
+  // Genie: Three Wishes value lock — if active, card value is 4 (cannot be changed by other effects)
+  // Apply after initial value, before other modifications (checked again at end)
+  const genieAtkLock = s.genieThreeWishesValueLock[attacker.owner];
+  const genieDefLock = s.genieThreeWishesValueLock[defender.owner];
+
+  // Genie: This Is No Parlor Trick — treat opposing card's value as its boost number
+  if (!s.combat.attackerEffectsCancelled && atkCardDef) {
+    const hasParlorTrick = atkCardDef.effects.some(e => e.timing === 'duringCombat' && e.type === 'genieParlorTrick');
+    if (hasParlorTrick) {
+      defValue = defCardDef?.boost || 0;
+    }
+  }
+  if (!s.combat.defenderEffectsCancelled && defCardDef) {
+    const hasParlorTrick = defCardDef.effects.some(e => e.timing === 'duringCombat' && e.type === 'genieParlorTrick');
+    if (hasParlorTrick) {
+      atkValue = atkCardDef?.boost || 0;
+    }
+  }
 
   // Air Scooter +1 bonus (cannot be cancelled)
   if (s.combat.airScooterUsed) {
@@ -2698,6 +2786,16 @@ function resolveCombatDamage(state: GameState): GameState {
       atkValue = 0;
       addLog(s, `Polyphase Coils: Attacker's card value set to 0!`);
     }
+  }
+
+  // Genie: Three Wishes value lock — override final value with 4 if lock is active
+  if (genieAtkLock) {
+    atkValue = 4;
+    addLog(s, `Three Wishes: Attacker's card value locked at 4!`);
+  }
+  if (genieDefLock) {
+    defValue = 4;
+    addLog(s, `Three Wishes: Defender's card value locked at 4!`);
   }
 
   // Mewtwo: Reflect — Mewtwo takes 1 less damage (applies to defender if Mewtwo)
@@ -3397,6 +3495,111 @@ function processAfterCombatEffect(
       break;
     }
 
+    // ---- Genie after-combat effects ----
+
+    case 'dealDamageIfLostAdjacent': {
+      // Careful What You Wish For: if lost, deal 1 damage to adjacent enemy
+      if (!selfWon && opponent.hp > 0) {
+        if (areAdjacent(state.board, self.spaceId, opponent.spaceId)) {
+          opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
+          addLog(state, `Careful What You Wish For: Deals ${effect.amount || 1} damage to ${opponent.name}! (${opponent.hp} HP)`);
+          checkHeroDeath(state);
+        } else {
+          addLog(state, `Careful What You Wish For: ${opponent.name} is not adjacent — no damage.`);
+        }
+      }
+      break;
+    }
+
+    case 'genieWishCommand': {
+      // Your Wish Is My Command: if won, may discard 2 cards for 1 extra action
+      if (selfWon && selfPlayer.hand.length >= 2) {
+        queue.push({
+          type: 'genieWishCommand',
+          playerIndex: selfPlayer.index,
+          label: `Your Wish Is My Command: You won! Discard 2 cards to take 1 extra action?`,
+        });
+      }
+      break;
+    }
+
+    case 'genieFreed': {
+      // I Am Freed: place Genie on any empty space, then deal 1 damage to each adjacent fighter
+      if (self.hp > 0) {
+        queue.push({
+          type: 'placeFighter',
+          playerIndex: selfPlayer.index,
+          fighterId: self.id,
+          label: `I Am Freed: Place ${self.name} on any empty space.`,
+        });
+        queue.push({
+          type: 'genieFreedDamage',
+          playerIndex: selfPlayer.index,
+          fighterId: self.id,
+          label: `I Am Freed: Deal 1 damage to every fighter adjacent to ${self.name}.`,
+        });
+      }
+      break;
+    }
+
+    case 'genieImprisonedWrath': {
+      // Imprisoned Wrath: may discard 2 cards to deal 2 damage to adjacent enemy
+      if (selfPlayer.hand.length >= 2) {
+        queue.push({
+          type: 'genieImprisonedWrath',
+          playerIndex: selfPlayer.index,
+          fighterId: self.id,
+          label: `Imprisoned Wrath: Discard 2 cards to deal 2 damage to an adjacent enemy?`,
+        });
+      }
+      break;
+    }
+
+    case 'drawPerDamageTaken': {
+      // Prisoner's Torment: draw cards equal to combat damage taken
+      const dmgTaken = state.combat?.damageDealt || 0;
+      if (dmgTaken > 0) {
+        drawCards(state, selfPlayer.index, dmgTaken);
+        addLog(state, `Prisoner's Torment: Drew ${dmgTaken} card(s) for taking ${dmgTaken} combat damage!`);
+      }
+      break;
+    }
+
+    case 'genieWishingMore': {
+      // Wishing for More Wishes: opponent draws 1, you draw 3
+      drawCards(state, opponentPlayer.index, 1);
+      addLog(state, `Wishing for More Wishes: ${opponentPlayer.name} draws 1 card.`);
+      drawCards(state, selfPlayer.index, 3);
+      addLog(state, `Wishing for More Wishes: ${selfPlayer.name} draws 3 cards!`);
+      break;
+    }
+
+    case 'genieDealDamageAdjacent': {
+      // I Grant You... Death: deal 1 damage to adjacent fighter (combat opponent if adjacent)
+      if (opponent.hp > 0 && areAdjacent(state.board, self.spaceId, opponent.spaceId)) {
+        opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
+        addLog(state, `I Grant You\u2026 Death: Deals ${effect.amount || 1} damage to ${opponent.name}! (${opponent.hp} HP)`);
+        checkHeroDeath(state);
+      } else if (opponent.hp > 0) {
+        addLog(state, `I Grant You\u2026 Death: ${opponent.name} is not adjacent — no damage.`);
+      }
+      break;
+    }
+
+    case 'genieSultansView': {
+      // I've Made Sultans Out of Less: view opponent's hand, choose card to discard
+      if (opponentPlayer.hand.length > 0) {
+        queue.push({
+          type: 'genieSultansDiscard',
+          playerIndex: selfPlayer.index,
+          label: `I've Made Sultans Out of Less: Look at ${opponentPlayer.name}'s hand and choose a card to discard.`,
+        });
+      } else {
+        addLog(state, `I've Made Sultans Out of Less: ${opponentPlayer.name} has no cards to discard.`);
+      }
+      break;
+    }
+
   }
 }
 
@@ -3533,6 +3736,55 @@ function processNextEffect(state: GameState): GameState {
 
     case 'zeldaDinsFireTarget': {
       state.phase = 'zelda_dinsFireTarget';
+      addLog(state, effect.label);
+      break;
+    }
+
+    case 'genieFreedDamage': {
+      // I Am Freed: deal 1 damage to every fighter adjacent to the Genie (auto-resolve)
+      const genie = effect.fighterId ? getFighter(state, effect.fighterId) : null;
+      if (genie && genie.hp > 0) {
+        const allNearby = state.fighters.filter(f =>
+          f.id !== genie.id && f.hp > 0 && f.spaceId !== '' &&
+          areAdjacent(state.board, genie.spaceId, f.spaceId)
+        );
+        if (allNearby.length > 0) {
+          for (const target of allNearby) {
+            target.hp = Math.max(0, target.hp - 1);
+            addLog(state, `I Am Freed: ${target.name} takes 1 damage! (${target.hp} HP)`);
+          }
+          checkHeroDeath(state);
+        } else {
+          addLog(state, `I Am Freed: No fighters adjacent to ${genie.name}.`);
+        }
+      }
+      if (state.phase !== 'gameOver') {
+        return processNextEffect(state);
+      }
+      return state;
+    }
+
+    case 'genieWishCommand': {
+      // Your Wish Is My Command: interactive — player chooses to pay 2 cards or skip
+      state.phase = 'genie_wish_command';
+      addLog(state, effect.label);
+      break;
+    }
+
+    case 'genieImprisonedWrath': {
+      // Imprisoned Wrath: interactive — player chooses to pay 2 cards for damage
+      state.phase = 'genie_imprisoned_wrath';
+      addLog(state, effect.label);
+      break;
+    }
+
+    case 'genieSultansDiscard': {
+      // I've Made Sultans Out of Less: reveal opponent's hand, player chooses card
+      const opponentIdx = effect.playerIndex === 0 ? 1 : 0;
+      const opponentPlayer = state.players[opponentIdx];
+      state.genieSultansRevealedCards = [...opponentPlayer.hand];
+      state.genieSultansTargetPlayer = opponentIdx;
+      state.phase = 'genie_sultans_discard';
       addLog(state, effect.label);
       break;
     }
@@ -4105,6 +4357,16 @@ export function playScheme(state: GameState, cardId: string): GameState {
       break;
     }
 
+    // ---- Genie schemes ----
+    case 'genie_three_wishes': {
+      // Gain 1 action, then choose one of 3 options
+      player.actionsRemaining++;
+      addLog(s, `Three Wishes: Gained 1 action! Now choose your wish.`);
+      s.pendingSchemeCard = card;
+      s.phase = 'genie_threeWishes';
+      return s;
+    }
+
     default:
       addLog(s, `Scheme has no programmed effect.`);
       break;
@@ -4637,6 +4899,118 @@ export function resolveCloneRushDiscard(state: GameState, cardId: string): GameS
   s.mewtwoCloneRushPlayerIndex = null;
 
   return continueEffectQueue(s);
+}
+
+// ---- Genie Post-Combat Interactive Resolutions ----
+
+export function useGenieWishCommand(state: GameState): GameState {
+  const s = clone(state);
+  const player = s.players[s.currentPlayer];
+  if (player.hand.length < 2) return continueEffectQueue(s);
+  // Discard first 2 cards from hand
+  const card1 = player.hand.shift()!;
+  const card2 = player.hand.shift()!;
+  player.discard.push(card1, card2);
+  player.actionsRemaining++;
+  const charDef = getCharDef(player.characterId);
+  const def1 = getCardDef(card1, charDef);
+  const def2 = getCardDef(card2, charDef);
+  addLog(s, `Your Wish Is My Command: Discarded ${def1?.name || 'a card'} and ${def2?.name || 'a card'} to gain 1 extra action!`);
+  return continueEffectQueue(s);
+}
+
+export function skipGenieWishCommand(state: GameState): GameState {
+  const s = clone(state);
+  addLog(s, `Skipped Your Wish Is My Command.`);
+  return continueEffectQueue(s);
+}
+
+export function useGenieImprisonedWrath(state: GameState, targetFighterId: string): GameState {
+  const s = clone(state);
+  const player = s.players[s.currentPlayer];
+  if (player.hand.length < 2) return continueEffectQueue(s);
+  const opponentIdx = s.currentPlayer === 0 ? 1 : 0;
+  const target = s.fighters.find(f => f.id === targetFighterId && f.owner === opponentIdx && f.hp > 0);
+  // Check that target is adjacent to Genie hero
+  const hero = getHero(s, s.currentPlayer);
+  if (!target || !hero || !areAdjacent(s.board, hero.spaceId, target.spaceId)) {
+    addLog(s, `Imprisoned Wrath: ${target?.name || 'target'} is not adjacent — no damage.`);
+    return continueEffectQueue(s);
+  }
+  const card1 = player.hand.shift()!;
+  const card2 = player.hand.shift()!;
+  player.discard.push(card1, card2);
+  const charDef = getCharDef(player.characterId);
+  const def1 = getCardDef(card1, charDef);
+  const def2 = getCardDef(card2, charDef);
+  addLog(s, `Imprisoned Wrath: Discarded ${def1?.name || 'a card'} and ${def2?.name || 'a card'}!`);
+  target.hp = Math.max(0, target.hp - 2);
+  addLog(s, `Imprisoned Wrath: Deals 2 damage to ${target.name}! (${target.hp} HP)`);
+  checkHeroDeath(s);
+  if (s.phase !== 'gameOver') {
+    return continueEffectQueue(s);
+  }
+  return s;
+}
+
+export function skipGenieImprisonedWrath(state: GameState): GameState {
+  const s = clone(state);
+  addLog(s, `Skipped Imprisoned Wrath.`);
+  return continueEffectQueue(s);
+}
+
+export function resolveGenieSultansDiscard(state: GameState, cardId: string): GameState {
+  const s = clone(state);
+  const targetPlayerIdx = s.genieSultansTargetPlayer;
+  if (targetPlayerIdx === null) return continueEffectQueue(s);
+  const targetPlayer = s.players[targetPlayerIdx];
+  const cardIdx = targetPlayer.hand.findIndex(c => c.id === cardId);
+  if (cardIdx < 0) return s; // wait for valid selection
+  const card = targetPlayer.hand.splice(cardIdx, 1)[0];
+  targetPlayer.discard.push(card);
+  const charDef = getCharDef(targetPlayer.characterId);
+  const def = getCardDef(card, charDef);
+  addLog(s, `I've Made Sultans Out of Less: ${targetPlayer.name} discards ${def?.name || 'a card'}!`);
+  s.genieSultansRevealedCards = [];
+  s.genieSultansTargetPlayer = null;
+  return continueEffectQueue(s);
+}
+
+export function resolveGenieThreeWishes(state: GameState, choice: string): GameState {
+  const s = clone(state);
+  const player = s.players[s.currentPlayer];
+
+  if (choice === 'draw5') {
+    drawCards(s, s.currentPlayer, 5);
+    addLog(s, `Three Wishes: Drew 5 cards!`);
+  } else if (choice === 'valueLock') {
+    s.genieThreeWishesValueLock = [...s.genieThreeWishesValueLock] as [boolean, boolean];
+    s.genieThreeWishesValueLock[s.currentPlayer] = true;
+    addLog(s, `Three Wishes: Your cards have value 4 for the rest of this turn!`);
+  } else if (choice === 'opponentDiscard') {
+    const opponentIdx = s.currentPlayer === 0 ? 1 : 0;
+    const opPlayer = s.players[opponentIdx];
+    // Discard 2 cards from opponent (random)
+    for (let i = 0; i < 2 && opPlayer.hand.length > 0; i++) {
+      const randIdx = Math.floor(Math.random() * opPlayer.hand.length);
+      const discarded = opPlayer.hand.splice(randIdx, 1)[0];
+      opPlayer.discard.push(discarded);
+      const charDef = getCharDef(opPlayer.characterId);
+      const def = getCardDef(discarded, charDef);
+      addLog(s, `Three Wishes: ${opPlayer.name} discards ${def?.name || 'a card'}.`);
+    }
+  }
+
+  // Discard the scheme card
+  if (s.pendingSchemeCard) {
+    player.discard.push(s.pendingSchemeCard);
+  }
+  s.pendingSchemeCard = null;
+
+  if (s.phase !== 'gameOver') {
+    useAction(s);
+  }
+  return s;
 }
 
 // ---- Get adjacent spaces to a specific fighter (for Psychic Storm clone placement) ----
