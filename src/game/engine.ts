@@ -1581,10 +1581,14 @@ function continueAfterCombat(s: GameState): GameState {
     processAfterCombatEffect(s, effect, attacker, defender, atkPlayer, defPlayer, attackerWon, effectQueue);
   }
 
-  // Mewtwo Clone Vats ability
-  if (attackerWon && !attacker.isHero && attacker.characterId === 'mewtwo') {
+  // Mewtwo Clone Vats ability: draw a card when Mewtwo (not a clone) loses combat
+  if (!attackerWon && attacker.isHero && attacker.characterId === 'mewtwo') {
     drawCards(s, atkPlayer.index, 1);
-    addLog(s, `Clone Vats: Clone won combat — ${atkPlayer.name} draws 1 card!`);
+    addLog(s, `Clone Vats: Mewtwo lost combat — ${atkPlayer.name} draws 1 card!`);
+  }
+  if (attackerWon && defender.isHero && defender.characterId === 'mewtwo') {
+    drawCards(s, defPlayer.index, 1);
+    addLog(s, `Clone Vats: Mewtwo lost combat — ${defPlayer.name} draws 1 card!`);
   }
 
   // Discard combat cards

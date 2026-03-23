@@ -836,7 +836,7 @@ export const MEWTWO: CharacterDef = {
   deckCards: mewtwoCards,
   ability: {
     name: 'Clone Vats',
-    description: 'Once per turn, at the start of your turn, you may discard 1 card to place 1 Clone in a space adjacent to Mewtwo. After combat: If your attacker was a Clone and you won the combat, draw 1 card.',
+    description: 'Once per turn, at the start of your turn, you may discard 1 card to place 1 Clone in a space adjacent to Mewtwo. After combat: If Mewtwo (not a Clone) loses combat, draw 1 card.',
     timing: 'startOfTurn',
   },
 };
