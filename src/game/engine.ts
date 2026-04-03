@@ -2483,8 +2483,10 @@ function continueAttackerDuringCombat(s: GameState): GameState {
       }
     }
   }
+  const defCharDefLocal = getCharDef(s.players[defender.owner].characterId);
+  const defCardDef = s.combat.defenseCard ? getCardDef(s.combat.defenseCard, defCharDefLocal) : null;
   if (!s.combat.defenderEffectsCancelled && defCardDef) {
-    const defDuringLocal = defCardDef.effects.filter(e => e.timing === 'duringCombat');
+    const defDuringLocal = defCardDef.effects.filter((e: { timing: string; type: string }) => e.timing === 'duringCombat');
     for (const effect of defDuringLocal) {
       if (effect.type === 'genieParlorTrick') {
         addLog(s, `This Is No Parlor Trick: The opposing card's value is treated as its boost number (${atkCardDef?.boost ?? 0})!`);
