@@ -3,7 +3,7 @@ import {
   startManeuver, applyManeuverBoost, selectManeuverFighter,
   executeManeuverMove, skipFighterMove, skipAllManeuverMoves,
   startAttack, selectAttackTarget, resolveAirScooterChoice,
-  selectAttackCard, selectDefenseCard,
+  selectAttackCard, selectDefenseCard, confirmCombatResolve,
   selectArthurBoostCard, selectDuringCombatBoost,
   resolveEffectMove, skipEffectMove, resolveEffectDiscard, resolveEffectPlace,
   resolveEffectPush, skipEffectPush,
@@ -98,6 +98,8 @@ export function dispatchAction(state: GameState, actionType: string, args: Recor
         return selectArthurBoostCard(state, (args.cardId as string) || null);
       case 'selectDefenseCard':
         return selectDefenseCard(state, (args.cardId as string) || null);
+      case 'confirmCombatResolve':
+        return confirmCombatResolve(state);
       case 'selectDuringCombatBoost':
         return selectDuringCombatBoost(state, (args.cardId as string) || null);
       case 'cancelAttack':

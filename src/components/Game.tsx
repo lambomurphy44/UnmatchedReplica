@@ -938,6 +938,8 @@ export const Game: React.FC = () => {
             state={gs}
             reachableSpaces={highlightedSpaces}
             onSpaceClick={handleSpaceClick}
+            combatAttackerId={gs.combat?.attackerId ?? null}
+            combatDefenderId={gs.combat?.defenderId ?? null}
           />
         </div>
 
@@ -1508,6 +1510,88 @@ export const Game: React.FC = () => {
           <button className="skip-btn" onClick={handleSkipDefense}>Take the hit (no defense)</button>
         </div>
       )}
+
+      {gs.phase === 'attack_resolve' && gs.combat && (() => {
+        const atkFighter = getFighter(gs, gs.combat.attackerId);
+        const defFighter = getFighter(gs, gs.combat.defenderId);
+        const atkPlayer = atkFighter ? gs.players[atkFighter.owner] : null;
+        const defPlayer = defFighter ? gs.players[defFighter.owner] : null;
+        const atkCharDef = atkPlayer ? getCharDef(atkPlayer.characterId) : null;
+        const defCharDef = defPlayer ? getCharDef(defPlayer.characterId) : null;
+        const atkCardDef = gs.combat.attackCard && atkCharDef ? getCardDef(gs.combat.attackCard, atkCharDef) : null;
+        const defCardDef = gs.combat.defenseCard && defCharDef ? getCardDef(gs.combat.defenseCard, defCharDef) : null;
+
+        const TYPE_COLORS: Record<string, string> = {
+          attack: '#c62828',
+          defense: '#1565c0',
+          versatile: '#6a1b9a',
+          scheme: '#f9a825',
+        };
+
+        return (
+          <div className="combat-resolve-overlay">
+            <div className="combat-resolve-box">
+              <h3 className="combat-resolve-title">Combat!</h3>
+              <div className="combat-resolve-subtitle">
+                {atkFighter?.name} <span style={{ color: '#ff1744' }}>attacks</span> {defFighter?.name}
+              </div>
+              <div className="combat-resolve-cards">
+                <div className="combat-resolve-card-slot">
+                  <div className="combat-resolve-role" style={{ color: '#ff1744' }}>Attacker</div>
+                  {atkCardDef ? (
+                    <div className="game-card combat-resolve-card" style={{ borderColor: TYPE_COLORS[atkCardDef.type] || '#666' }}>
+                      <div className="card-type" style={{ background: TYPE_COLORS[atkCardDef.type] }}>
+                        {atkCardDef.type.toUpperCase()}
+                      </div>
+                      <div className="card-name">{atkCardDef.name}</div>
+                      <div className="card-value">
+                        {atkCardDef.type !== 'scheme' && <span className="card-val-num">{atkCardDef.value}</span>}
+                      </div>
+                      <div className="card-boost">Boost: +{atkCardDef.boost}</div>
+                      {atkCardDef.effectText && (
+                        <div className="card-effect">{atkCardDef.effectText}</div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="combat-resolve-no-card">No card</div>
+                  )}
+                </div>
+                <div className="combat-resolve-vs">VS</div>
+                <div className="combat-resolve-card-slot">
+                  <div className="combat-resolve-role" style={{ color: '#2979ff' }}>Defender</div>
+                  {defCardDef ? (
+                    <div className="game-card combat-resolve-card" style={{ borderColor: TYPE_COLORS[defCardDef.type] || '#666' }}>
+                      <div className="card-type" style={{ background: TYPE_COLORS[defCardDef.type] }}>
+                        {defCardDef.type.toUpperCase()}
+                      </div>
+                      <div className="card-name">{defCardDef.name}</div>
+                      <div className="card-value">
+                        {defCardDef.type !== 'scheme' && <span className="card-val-num">{defCardDef.value}</span>}
+                      </div>
+                      <div className="card-boost">Boost: +{defCardDef.boost}</div>
+                      {defCardDef.effectText && (
+                        <div className="card-effect">{defCardDef.effectText}</div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="combat-resolve-no-card">No card played</div>
+                  )}
+                </div>
+              </div>
+              {canInteract && (
+                <button className="action-btn" onClick={() => act('confirmCombatResolve')}>
+                  Resolve Combat
+                </button>
+              )}
+              {!canInteract && (
+                <div style={{ color: '#aaa', fontSize: '0.9rem', marginTop: '8px' }}>
+                  Waiting for attacker to continue...
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {canInteract && gs.phase === 'scheme_selectCard' && (
         <div className="phase-prompt">

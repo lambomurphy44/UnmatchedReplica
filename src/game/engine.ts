@@ -1967,6 +1967,15 @@ export function selectDefenseCard(state: GameState, cardId: string | null): Game
     }
   }
 
+  // Pause at attack_resolve so the UI can show both cards before resolving
+  s.phase = 'attack_resolve';
+  return s;
+}
+
+/** Continue from the attack_resolve display phase into actual combat resolution */
+export function confirmCombatResolve(state: GameState): GameState {
+  const s = clone(state);
+  if (!s.combat) return s;
   return resolveCombat(s);
 }
 

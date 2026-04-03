@@ -28,6 +28,8 @@ interface BoardProps {
   state: GameState;
   reachableSpaces: string[];
   onSpaceClick: (spaceId: string) => void;
+  combatAttackerId?: string | null;
+  combatDefenderId?: string | null;
 }
 
 // Colorblind-friendly zone colors (Wong palette — distinguishable by deuteranopia/protanopia)
@@ -127,7 +129,7 @@ function renderZoneCircle(space: Space, cx: number, cy: number, r: number): Reac
   return slices;
 }
 
-export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceClick }) => {
+export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceClick, combatAttackerId, combatDefenderId }) => {
   const { board, fighters } = state;
   const maxX = Math.max(...board.spaces.map(s => s.x));
   const maxY = Math.max(...board.spaces.map(s => s.y));
@@ -296,9 +298,17 @@ export const Board: React.FC<BoardProps> = ({ state, reachableSpaces, onSpaceCli
                 const ty = cy + offsetY;
                 const color = getPlayerColor(f.owner);
                 const portrait = getPortrait(f);
+                const isAttacker = combatAttackerId === f.id;
+                const isDefender = combatDefenderId === f.id;
+                const combatRingColor = isAttacker ? '#ff1744' : isDefender ? '#2979ff' : null;
 
                 return (
                   <g key={f.id}>
+                    {combatRingColor && (
+                      <circle cx={tx} cy={ty} r={r + 6} fill="none" stroke={combatRingColor} strokeWidth={3} opacity={0.9}>
+                        <animate attributeName="opacity" values="0.9;0.4;0.9" dur="1.5s" repeatCount="indefinite" />
+                      </circle>
+                    )}
                     <circle cx={tx} cy={ty} r={r + 2} fill="none" stroke={color} strokeWidth={2.5} />
                     <circle cx={tx} cy={ty} r={r} fill="#222" />
                     <clipPath id={`token-${f.id}`}>
