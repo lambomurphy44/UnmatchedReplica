@@ -1073,8 +1073,8 @@ export const Game: React.FC = () => {
       })()}
 
       {canInteract && gs.phase === 'tesla_coilChoice' && (() => {
-        // Find the Tesla player index
-        let teslaPlayerIdx = gs.currentPlayer;
+        // Find the Tesla player index — use stored index (needed when combat is null for after-combat effects)
+        let teslaPlayerIdx = gs.teslaCoilChoicePlayerIndex ?? gs.currentPlayer;
         if (gs.combat) {
           const atk = getFighter(gs, gs.combat.attackerId);
           const def = getFighter(gs, gs.combat.defenderId);

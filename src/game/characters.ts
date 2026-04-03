@@ -12,7 +12,7 @@ const arthurCards: CardDef[] = [
     type: 'attack',
     value: 6,
     boost: 3,
-    restriction: 'hero',
+    restriction: 'King Arthur',
     quantity: 1,
     effects: [],
     effectText: '',
@@ -23,7 +23,7 @@ const arthurCards: CardDef[] = [
     type: 'attack',
     value: 2,
     boost: 3,
-    restriction: 'hero',
+    restriction: 'King Arthur',
     quantity: 3,
     effects: [
       { type: 'boostAttack', timing: 'duringCombat' },
@@ -36,7 +36,7 @@ const arthurCards: CardDef[] = [
     type: 'defense',
     value: 1,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'King Arthur',
     quantity: 1,
     effects: [
       { type: 'healIfLow', timing: 'afterCombat', amount: 8, param: '4' },
@@ -49,7 +49,7 @@ const arthurCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'King Arthur',
     quantity: 1,
     effects: [],
     effectText: 'Search your deck and discard pile for Excalibur. Add it to your hand. Shuffle your deck.',
@@ -62,7 +62,7 @@ const arthurCards: CardDef[] = [
     type: 'attack',
     value: 4,
     boost: 2,
-    restriction: 'sidekick',
+    restriction: 'Merlin',
     quantity: 1,
     effects: [
       { type: 'drawCards', timing: 'afterCombat', amount: 2 },
@@ -75,7 +75,7 @@ const arthurCards: CardDef[] = [
     type: 'attack',
     value: 4,
     boost: 2,
-    restriction: 'sidekick',
+    restriction: 'Merlin',
     quantity: 1,
     effects: [
       { type: 'drawIfWon', timing: 'afterCombat', amount: 2 },
@@ -88,7 +88,7 @@ const arthurCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 2,
-    restriction: 'sidekick',
+    restriction: 'Merlin',
     quantity: 2,
     effects: [
       { type: 'moveHero', timing: 'afterCombat', amount: 5 },
@@ -101,7 +101,7 @@ const arthurCards: CardDef[] = [
     type: 'defense',
     value: 0,
     boost: 2,
-    restriction: 'sidekick',
+    restriction: 'Merlin',
     quantity: 2,
     effects: [
       { type: 'preventDamage', timing: 'duringCombat' },
@@ -115,7 +115,7 @@ const arthurCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 2,
-    restriction: 'sidekick',
+    restriction: 'Merlin',
     quantity: 1,
     effects: [],
     effectText: 'Look at the top 4 cards of your deck. Add 2 to your hand, put the other 2 back on top.',
@@ -126,7 +126,7 @@ const arthurCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 2,
-    restriction: 'sidekick',
+    restriction: 'Merlin',
     quantity: 2,
     effects: [],
     effectText: 'Move each of your fighters up to 3 spaces.',
@@ -137,7 +137,7 @@ const arthurCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 2,
-    restriction: 'sidekick',
+    restriction: 'Merlin',
     quantity: 1,
     effects: [],
     effectText: "Deal 2 damage to each opposing fighter in Merlin's zone. If any are defeated, draw 1 card.",
@@ -150,7 +150,7 @@ const arthurCards: CardDef[] = [
     type: 'attack',
     value: 3,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'moveSelf', timing: 'afterCombat', amount: 4 },
@@ -163,7 +163,7 @@ const arthurCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'valueIfMoved', timing: 'duringCombat', amount: 5 },
@@ -176,7 +176,7 @@ const arthurCards: CardDef[] = [
     type: 'versatile',
     value: 4,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'moveFighterIfWon', timing: 'afterCombat', amount: 2 },
@@ -189,7 +189,7 @@ const arthurCards: CardDef[] = [
     type: 'versatile',
     value: 1,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'regroupDraw', timing: 'afterCombat' },
@@ -202,7 +202,7 @@ const arthurCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'cancelEffects', timing: 'immediately' },
@@ -223,7 +223,7 @@ const medusaCards: CardDef[] = [
     type: 'attack',
     value: 2,
     boost: 4,
-    restriction: 'hero',
+    restriction: 'Medusa',
     quantity: 3,
     effects: [
       { type: 'dealDamageIfWon', timing: 'afterCombat', amount: 8 },
@@ -236,7 +236,7 @@ const medusaCards: CardDef[] = [
     type: 'attack',
     value: 3,
     boost: 3,
-    restriction: 'hero',
+    restriction: 'Medusa',
     quantity: 3,
     effects: [
       { type: 'boostAttack', timing: 'duringCombat' },
@@ -249,7 +249,7 @@ const medusaCards: CardDef[] = [
     type: 'defense',
     value: 4,
     boost: 3,
-    restriction: 'hero',
+    restriction: 'Medusa',
     quantity: 3,
     effects: [
       { type: 'opponentDiscards', timing: 'afterCombat', amount: 1 },
@@ -262,7 +262,7 @@ const medusaCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 4,
-    restriction: 'hero',
+    restriction: 'Medusa',
     quantity: 2,
     effects: [],
     effectText: "Deal 2 damage to any one fighter in Medusa's zone.",
@@ -273,7 +273,7 @@ const medusaCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Medusa',
     quantity: 2,
     effects: [],
     effectText: "Move each of your fighters up to 3 spaces. Then return a defeated Harpy to any space in Medusa's zone.",
@@ -286,7 +286,7 @@ const medusaCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 2,
-    restriction: 'sidekick',
+    restriction: 'Harpy',
     quantity: 3,
     effects: [
       { type: 'opponentDiscards', timing: 'afterCombat', amount: 1 },
@@ -299,7 +299,7 @@ const medusaCards: CardDef[] = [
     type: 'versatile',
     value: 4,
     boost: 3,
-    restriction: 'sidekick',
+    restriction: 'Harpy',
     quantity: 2,
     effects: [
       { type: 'moveHarpies', timing: 'afterCombat', amount: 3 },
@@ -314,7 +314,7 @@ const medusaCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'cancelEffects', timing: 'immediately' },
@@ -327,7 +327,7 @@ const medusaCards: CardDef[] = [
     type: 'versatile',
     value: 1,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'regroupDraw', timing: 'afterCombat' },
@@ -340,7 +340,7 @@ const medusaCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'drawCards', timing: 'afterCombat', amount: 1 },
@@ -353,7 +353,7 @@ const medusaCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'moveSelf', timing: 'afterCombat', amount: 3 },
@@ -374,7 +374,7 @@ const aangCards: CardDef[] = [
     type: 'attack',
     value: 3,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Aang',
     quantity: 3,
     effects: [
       { type: 'pushIfMoved', timing: 'duringCombat', amount: 1 },
@@ -388,7 +388,7 @@ const aangCards: CardDef[] = [
     type: 'attack',
     value: 2,
     boost: 1,
-    restriction: 'hero',
+    restriction: 'Aang',
     quantity: 2,
     effects: [
       { type: 'gainActionAndDraw', timing: 'afterCombat' },
@@ -401,7 +401,7 @@ const aangCards: CardDef[] = [
     type: 'versatile',
     value: 4,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Aang',
     quantity: 2,
     effects: [
       { type: 'pushAndDrawIfWon', timing: 'afterCombat', amount: 1 },
@@ -414,7 +414,7 @@ const aangCards: CardDef[] = [
     type: 'attack',
     value: 5,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Aang',
     quantity: 2,
     effects: [
       { type: 'moveHeroIfWon', timing: 'afterCombat', amount: 2 },
@@ -427,7 +427,7 @@ const aangCards: CardDef[] = [
     type: 'attack',
     value: 7,
     boost: 4,
-    restriction: 'hero',
+    restriction: 'Aang',
     quantity: 1,
     effects: [
       { type: 'discardRandomAndDeck', timing: 'immediately' },
@@ -441,7 +441,7 @@ const aangCards: CardDef[] = [
     type: 'versatile',
     value: 4,
     boost: 3,
-    restriction: 'hero',
+    restriction: 'Aang',
     quantity: 1,
     effects: [
       { type: 'dealDamageIfWon', timing: 'afterCombat', amount: 1 },
@@ -454,7 +454,7 @@ const aangCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Aang',
     quantity: 3,
     effects: [
       { type: 'pushAndDrawIfPushed', timing: 'afterCombat', amount: 2 },
@@ -467,7 +467,7 @@ const aangCards: CardDef[] = [
     type: 'defense',
     value: 3,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Aang',
     quantity: 2,
     effects: [
       { type: 'cancelEffects', timing: 'immediately' },
@@ -480,7 +480,7 @@ const aangCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Aang',
     quantity: 2,
     effects: [],
     effectText: 'Search your deck for any card to add to your hand and gain 1 action. Shuffle your deck.',
@@ -493,7 +493,7 @@ const aangCards: CardDef[] = [
     type: 'versatile',
     value: 4,
     boost: 3,
-    restriction: 'sidekick',
+    restriction: 'Appa',
     quantity: 2,
     effects: [
       { type: 'moveToNewZone', timing: 'immediately' },
@@ -506,7 +506,7 @@ const aangCards: CardDef[] = [
     type: 'versatile',
     value: 4,
     boost: 2,
-    restriction: 'sidekick',
+    restriction: 'Appa',
     quantity: 2,
     effects: [
       { type: 'chargeChoice', timing: 'immediately', amount: 3 },
@@ -521,7 +521,7 @@ const aangCards: CardDef[] = [
     type: 'defense',
     value: 3,
     boost: 3,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'moveDefender', timing: 'afterCombat', amount: 2 },
@@ -534,7 +534,7 @@ const aangCards: CardDef[] = [
     type: 'defense',
     value: 3,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'moveHeroIfDamaged', timing: 'afterCombat', amount: 1 },
@@ -547,7 +547,7 @@ const aangCards: CardDef[] = [
     type: 'defense',
     value: 3,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'swapAangAppa', timing: 'immediately' },
@@ -560,7 +560,7 @@ const aangCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 3,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 1,
     effects: [],
     effectText: 'Your fighters each recover 1 health. Draw 1 card. Gain 1 action.',
@@ -646,7 +646,7 @@ const mewtwoCards: CardDef[] = [
     type: 'attack',
     value: 4,
     boost: 3,
-    restriction: 'hero',
+    restriction: 'Mewtwo',
     quantity: 2,
     effects: [
       { type: 'plusPerClone', timing: 'duringCombat', amount: 1 },
@@ -659,7 +659,7 @@ const mewtwoCards: CardDef[] = [
     type: 'attack',
     value: 4,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Mewtwo',
     quantity: 2,
     effects: [
       { type: 'opponentDiscardsRandomIfWon', timing: 'afterCombat', amount: 1 },
@@ -672,7 +672,7 @@ const mewtwoCards: CardDef[] = [
     type: 'versatile',
     value: 4,
     boost: 3,
-    restriction: 'hero',
+    restriction: 'Mewtwo',
     quantity: 1,
     effects: [
       { type: 'placeCloneAdjacentOpponent', timing: 'immediately' },
@@ -685,7 +685,7 @@ const mewtwoCards: CardDef[] = [
     type: 'defense',
     value: 4,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Mewtwo',
     quantity: 2,
     effects: [
       { type: 'preventEffectDamage', timing: 'immediately' },
@@ -698,7 +698,7 @@ const mewtwoCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 1,
-    restriction: 'hero',
+    restriction: 'Mewtwo',
     quantity: 2,
     effects: [],
     effectText: 'Put this card in your play area. During combat: Mewtwo takes 1 less damage from attacks. At the start of your turn, if Mewtwo controls no Clones, discard this card.',
@@ -709,7 +709,7 @@ const mewtwoCards: CardDef[] = [
     type: 'defense',
     value: 1,
     boost: 1,
-    restriction: 'hero',
+    restriction: 'Mewtwo',
     quantity: 3,
     effects: [
       { type: 'recycleDiscard', timing: 'immediately', amount: 3 },
@@ -722,7 +722,7 @@ const mewtwoCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Mewtwo',
     quantity: 2,
     effects: [],
     effectText: 'IMMEDIATELY: Move Mewtwo up to 5 spaces (may move through other fighters). Draw 1 card. Gain 1 action.',
@@ -733,7 +733,7 @@ const mewtwoCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Mewtwo',
     quantity: 1,
     effects: [],
     effectText: 'IMMEDIATELY: Mewtwo loses 1 health. Place up to 2 Clones in spaces adjacent to Mewtwo. Draw 1 card.',
@@ -744,7 +744,7 @@ const mewtwoCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Mewtwo',
     quantity: 2,
     effects: [],
     effectText: 'IMMEDIATELY: Recover 2 health. If Mewtwo has 6 or less health, recover 3 instead.',
@@ -757,7 +757,7 @@ const mewtwoCards: CardDef[] = [
     type: 'attack',
     value: 3,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'moveAllClones', timing: 'afterCombat', amount: 2 },
@@ -770,7 +770,7 @@ const mewtwoCards: CardDef[] = [
     type: 'versatile',
     value: 4,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'cancelIfFlanked', timing: 'immediately' },
@@ -783,7 +783,7 @@ const mewtwoCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 4,
     effects: [
       { type: 'plusIfCloneAdjacent', timing: 'duringCombat', amount: 1 },
@@ -798,7 +798,7 @@ const mewtwoCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 3,
-    restriction: 'sidekick',
+    restriction: 'Clone',
     quantity: 2,
     effects: [
       { type: 'cloneRushDiscard', timing: 'afterCombat' },
@@ -811,7 +811,7 @@ const mewtwoCards: CardDef[] = [
     type: 'defense',
     value: 0,
     boost: 2,
-    restriction: 'sidekick',
+    restriction: 'Clone',
     quantity: 2,
     effects: [
       { type: 'sacrificialBlock', timing: 'immediately' },
@@ -853,7 +853,7 @@ const yennengaCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Yennenga',
     quantity: 3,
     effects: [
       { type: 'moveHeroThroughEnemies', timing: 'afterCombat', amount: 5 },
@@ -868,7 +868,7 @@ const yennengaCards: CardDef[] = [
     type: 'attack',
     value: 3,
     boost: 3,
-    restriction: 'hero',
+    restriction: 'Yennenga',
     quantity: 3,
     effects: [
       { type: 'rainOfArrowsFollowUp', timing: 'afterCombat', amount: 3 },
@@ -881,7 +881,7 @@ const yennengaCards: CardDef[] = [
     type: 'attack',
     value: 3,
     boost: 3,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'gainActionAndDraw', timing: 'immediately' },
@@ -894,7 +894,7 @@ const yennengaCards: CardDef[] = [
     type: 'defense',
     value: 3,
     boost: 3,
-    restriction: 'hero',
+    restriction: 'Yennenga',
     quantity: 2,
     effects: [],
     effectText: 'IMMEDIATELY: Your opponent may discard a card. If they don\'t, return a defeated Archer to a space in Yennenga\'s zone.',
@@ -905,7 +905,7 @@ const yennengaCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 3,
-    restriction: 'hero',
+    restriction: 'Yennenga',
     quantity: 3,
     effects: [
       { type: 'plusPerZone', timing: 'duringCombat', amount: 1 },
@@ -918,7 +918,7 @@ const yennengaCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Yennenga',
     quantity: 3,
     effects: [
       { type: 'dealDamageAfterCombat', timing: 'afterCombat', amount: 2 },
@@ -931,7 +931,7 @@ const yennengaCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'valueIfMoved', timing: 'duringCombat', amount: 5 },
@@ -944,7 +944,7 @@ const yennengaCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 1,
-    restriction: 'sidekick',
+    restriction: 'Archer',
     quantity: 2,
     effects: [
       { type: 'valueIfDifferentZone', timing: 'duringCombat', amount: 4 },
@@ -957,7 +957,7 @@ const yennengaCards: CardDef[] = [
     type: 'versatile',
     value: 1,
     boost: 2,
-    restriction: 'sidekick',
+    restriction: 'Archer',
     quantity: 2,
     effects: [
       { type: 'pushOpponent', timing: 'afterCombat', amount: 4 },
@@ -971,7 +971,7 @@ const yennengaCards: CardDef[] = [
     type: 'versatile',
     value: 4,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'skirmishMove', timing: 'afterCombat', amount: 2 },
@@ -984,7 +984,7 @@ const yennengaCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 3,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'gainActions', timing: 'immediately', amount: 2 },
@@ -997,7 +997,7 @@ const yennengaCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'drawCards', timing: 'immediately', amount: 1 },
@@ -1039,7 +1039,7 @@ const sokkaCards: CardDef[] = [
     type: 'versatile',
     value: 4,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Sokka',
     quantity: 2,
     effects: [
       { type: 'discardToBoost', timing: 'duringCombat', amount: 2 },
@@ -1052,7 +1052,7 @@ const sokkaCards: CardDef[] = [
     type: 'attack',
     value: 3,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Sokka',
     quantity: 2,
     effects: [
       { type: 'boomerangFlipForValue', timing: 'duringCombat', amount: 6 },
@@ -1065,7 +1065,7 @@ const sokkaCards: CardDef[] = [
     type: 'attack',
     value: 3,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Sokka',
     quantity: 3,
     effects: [
       { type: 'boomerangReadyIfLost', timing: 'afterCombat' },
@@ -1078,7 +1078,7 @@ const sokkaCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 3,
-    restriction: 'hero',
+    restriction: 'Sokka',
     quantity: 2,
     effects: [
       { type: 'boomerangBounceDamage', timing: 'afterCombat', amount: 1 },
@@ -1091,7 +1091,7 @@ const sokkaCards: CardDef[] = [
     type: 'defense',
     value: 2,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Sokka',
     quantity: 2,
     effects: [
       { type: 'boomerangFlipForValueAndCancel', timing: 'duringCombat', amount: 4 },
@@ -1104,7 +1104,7 @@ const sokkaCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 3,
-    restriction: 'hero',
+    restriction: 'Sokka',
     quantity: 2,
     effects: [
       { type: 'boomerangSetupValue', timing: 'duringCombat', amount: 4 },
@@ -1118,7 +1118,7 @@ const sokkaCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Sokka',
     quantity: 3,
     effects: [
       { type: 'boomerangReelBack', timing: 'immediately' },
@@ -1131,7 +1131,7 @@ const sokkaCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 4,
-    restriction: 'hero',
+    restriction: 'Sokka',
     quantity: 2,
     effects: [
       { type: 'healSelf', timing: 'immediately', amount: 3 },
@@ -1147,7 +1147,7 @@ const sokkaCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 2,
-    restriction: 'sidekick',
+    restriction: 'Suki',
     quantity: 2,
     effects: [
       { type: 'moveSelf', timing: 'immediately', amount: 3 },
@@ -1161,7 +1161,7 @@ const sokkaCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 3,
-    restriction: 'sidekick',
+    restriction: 'Suki',
     quantity: 2,
     effects: [
       { type: 'pushFighter', timing: 'immediately', amount: 2 },
@@ -1174,7 +1174,7 @@ const sokkaCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 2,
-    restriction: 'sidekick',
+    restriction: 'Suki',
     quantity: 2,
     effects: [
       { type: 'valueIfOpponentMoved', timing: 'duringCombat', amount: 5 },
@@ -1187,7 +1187,7 @@ const sokkaCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 2,
-    restriction: 'sidekick',
+    restriction: 'Suki',
     quantity: 2,
     effects: [
       { type: 'dealDamageIfLost', timing: 'afterCombat', amount: 1 },
@@ -1202,7 +1202,7 @@ const sokkaCards: CardDef[] = [
     type: 'versatile',
     value: 4,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'skirmishMove', timing: 'afterCombat', amount: 2 },
@@ -1215,7 +1215,7 @@ const sokkaCards: CardDef[] = [
     type: 'versatile',
     value: 1,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'regroupDraw', timing: 'afterCombat' },
@@ -1256,7 +1256,7 @@ const teslaCards: CardDef[] = [
     type: 'attack',
     value: 4,
     boost: 3,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'teslaCoilGainActions', timing: 'afterCombat' },
@@ -1269,7 +1269,7 @@ const teslaCards: CardDef[] = [
     type: 'attack',
     value: 3,
     boost: 4,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'teslaCoilValue', timing: 'duringCombat', amount: 5, param: '7' },
@@ -1282,7 +1282,7 @@ const teslaCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'teslaCoilCancel', timing: 'immediately' },
@@ -1295,7 +1295,7 @@ const teslaCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'teslaCoilZoneDamage', timing: 'afterCombat' },
@@ -1308,7 +1308,7 @@ const teslaCards: CardDef[] = [
     type: 'versatile',
     value: 4,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'teslaCoilRevealDiscard', timing: 'duringCombat' },
@@ -1321,7 +1321,7 @@ const teslaCards: CardDef[] = [
     type: 'defense',
     value: 3,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'teslaCoilDraw', timing: 'afterCombat' },
@@ -1334,7 +1334,7 @@ const teslaCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'teslaCoilRepulsion', timing: 'afterCombat', amount: 2 },
@@ -1347,7 +1347,7 @@ const teslaCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'teslaChargeCoils', timing: 'afterCombat' },
@@ -1360,7 +1360,7 @@ const teslaCards: CardDef[] = [
     type: 'attack',
     value: 5,
     boost: 3,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'teslaAlternatingCurrent', timing: 'afterCombat' },
@@ -1373,7 +1373,7 @@ const teslaCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 3,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'gainActions', timing: 'immediately', amount: 1 },
@@ -1386,7 +1386,7 @@ const teslaCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'teslaFullyCharged', timing: 'immediately' },
@@ -1421,7 +1421,7 @@ const zeldaCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'zeldaVanishingStrike', timing: 'afterCombat' },
@@ -1434,7 +1434,7 @@ const zeldaCards: CardDef[] = [
     type: 'defense',
     value: 3,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'zeldaHylianGuard', timing: 'afterCombat' },
@@ -1447,7 +1447,7 @@ const zeldaCards: CardDef[] = [
     type: 'attack',
     value: 4,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'zeldaLightArrow', timing: 'immediately' },
@@ -1460,7 +1460,7 @@ const zeldaCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 3,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'zeldaSheikahVeil', timing: 'immediately' },
@@ -1473,7 +1473,7 @@ const zeldaCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 3,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'zeldaFaroresWind', timing: 'immediately' },
@@ -1486,7 +1486,7 @@ const zeldaCards: CardDef[] = [
     type: 'attack',
     value: 4,
     boost: 3,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'zeldaDinsFire', timing: 'afterCombat' },
@@ -1498,15 +1498,15 @@ const zeldaCards: CardDef[] = [
     id: 'zelda_needle_storm',
     name: 'Needle Storm',
     type: 'attack',
-    value: 4,
+    value: 3,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Sheik',
     quantity: 3,
     effects: [
       { type: 'zeldaNeedleStormDuring', timing: 'duringCombat' },
       { type: 'zeldaNeedleStormAfter', timing: 'afterCombat' },
     ],
-    effectText: 'DURING COMBAT: If this attack was made using your Bonus Attack, this card\'s value is +2. AFTER COMBAT: You may move 1 space.',
+    effectText: 'DURING COMBAT: If this was your third action this turn, this card\'s value is +2. AFTER COMBAT: You may move 1 space.',
   },
   {
     id: 'zelda_smoke_bomb',
@@ -1514,7 +1514,7 @@ const zeldaCards: CardDef[] = [
     type: 'defense',
     value: 2,
     boost: 3,
-    restriction: 'hero',
+    restriction: 'Sheik',
     quantity: 3,
     effects: [
       { type: 'zeldaSmokeBomb', timing: 'immediately' },
@@ -1527,7 +1527,7 @@ const zeldaCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Sheik',
     quantity: 2,
     effects: [
       { type: 'zeldaImpasTraining', timing: 'immediately' },
@@ -1541,7 +1541,7 @@ const zeldaCards: CardDef[] = [
     type: 'defense',
     value: 3,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Zelda',
     quantity: 3,
     effects: [
       { type: 'zeldaNayrusLove', timing: 'duringCombat' },
@@ -1554,7 +1554,7 @@ const zeldaCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 2,
-    restriction: 'hero',
+    restriction: 'Zelda',
     quantity: 2,
     effects: [
       { type: 'zeldaSongOfTime', timing: 'immediately' },
@@ -1567,7 +1567,7 @@ const zeldaCards: CardDef[] = [
     type: 'attack',
     value: 4,
     boost: 3,
-    restriction: 'hero',
+    restriction: 'Zelda',
     quantity: 2,
     effects: [
       { type: 'zeldaGoddessBlade', timing: 'afterCombat' },
@@ -1602,7 +1602,7 @@ const genieCards: CardDef[] = [
     type: 'attack',
     value: 4,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'dealDamageIfLostAdjacent', timing: 'afterCombat', amount: 1 },
@@ -1615,7 +1615,7 @@ const genieCards: CardDef[] = [
     type: 'attack',
     value: 3,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'genieWishCommand', timing: 'afterCombat' },
@@ -1628,7 +1628,7 @@ const genieCards: CardDef[] = [
     type: 'attack',
     value: 3,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'genieFreed', timing: 'afterCombat' },
@@ -1641,7 +1641,7 @@ const genieCards: CardDef[] = [
     type: 'attack',
     value: 3,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'genieImprisonedWrath', timing: 'afterCombat' },
@@ -1655,7 +1655,7 @@ const genieCards: CardDef[] = [
     type: 'defense',
     value: 0,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'healSelf', timing: 'immediately', amount: 4 },
@@ -1668,7 +1668,7 @@ const genieCards: CardDef[] = [
     type: 'defense',
     value: 1,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'drawPerDamageTaken', timing: 'afterCombat' },
@@ -1682,7 +1682,7 @@ const genieCards: CardDef[] = [
     type: 'scheme',
     value: 0,
     boost: 3,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [],
     effectText: 'Gain 1 action. Then choose one: draw 5 cards; your cards have value 4 for the rest of the turn; or your opponent discards 2 cards.',
@@ -1694,7 +1694,7 @@ const genieCards: CardDef[] = [
     type: 'versatile',
     value: 3,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'genieWishingMore', timing: 'afterCombat' },
@@ -1707,7 +1707,7 @@ const genieCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'genieDealDamageAdjacent', timing: 'afterCombat', amount: 1 },
@@ -1720,7 +1720,7 @@ const genieCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 3,
     effects: [
       { type: 'cancelEffects', timing: 'immediately' },
@@ -1733,7 +1733,7 @@ const genieCards: CardDef[] = [
     type: 'versatile',
     value: 2,
     boost: 1,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'genieSultansView', timing: 'afterCombat' },
@@ -1746,7 +1746,7 @@ const genieCards: CardDef[] = [
     type: 'versatile',
     value: 1,
     boost: 2,
-    restriction: 'any',
+    restriction: 'Any',
     quantity: 2,
     effects: [
       { type: 'genieParlorTrick', timing: 'duringCombat' },

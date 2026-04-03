@@ -171,6 +171,8 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
     zeldaImpasRevealedCards: [],
     zeldaImpasTargetPlayer: null,
     zeldaBonusAttackUsed: false,
+    actionsTakenThisTurn: 0,
+    teslaCoilChoicePlayerIndex: null,
     genieThreeWishesValueLock: [false, false],
     geniePendingFreedDamage: false,
     genieSultansRevealedCards: [],
@@ -341,21 +343,22 @@ export function getPlayableCards(state: GameState, cardType?: 'attack' | 'defens
 
 /** Check if a card can be played by a given fighter based on restriction */
 export function canFighterPlayCard(fighter: Fighter, cardDef: CardDef, state?: GameState): boolean {
-  if (cardDef.restriction === 'any') return true;
-  if (cardDef.restriction === 'hero') {
-    if (!fighter.isHero) return false;
-    // Zelda form restrictions: Sheik-only and Zelda-only cards
-    if (state && fighter.characterId === 'zelda') {
+  if (cardDef.restriction === 'Any') return true;
+  // Zelda/Sheik form restrictions
+  if (cardDef.restriction === 'Zelda' || cardDef.restriction === 'Sheik') {
+    if (!fighter.isHero || fighter.characterId !== 'zelda') return false;
+    if (state) {
       const form = state.zeldaCurrentForm[fighter.owner];
-      const sheikOnlyCards = ['zelda_needle_storm', 'zelda_smoke_bomb', 'zelda_impas_training'];
-      const zeldaOnlyCards = ['zelda_nayrus_love', 'zelda_song_of_time', 'zelda_goddess_blade'];
-      if (sheikOnlyCards.includes(cardDef.id) && form !== 'sheik') return false;
-      if (zeldaOnlyCards.includes(cardDef.id) && form !== 'zelda') return false;
+      if (cardDef.restriction === 'Sheik' && form !== 'sheik') return false;
+      if (cardDef.restriction === 'Zelda' && form !== 'zelda') return false;
     }
     return true;
   }
-  if (cardDef.restriction === 'sidekick') return !fighter.isHero;
-  return true;
+  // Hero restriction: card's restriction matches the hero's name
+  if (fighter.isHero) return fighter.name === cardDef.restriction;
+  // Sidekick: strip trailing number (e.g., "Harpy 1" → "Harpy")
+  const baseName = fighter.name.replace(/ \d+$/, '');
+  return baseName === cardDef.restriction;
 }
 
 // ---- Sidekick Placement ----
@@ -574,6 +577,7 @@ function endTurn(state: GameState) {
 function finishEndTurn(state: GameState) {
   state.currentPlayer = state.currentPlayer === 0 ? 1 : 0;
   state.players[state.currentPlayer].actionsRemaining = 2;
+  state.actionsTakenThisTurn = 0;
   state.selectedFighter = null;
   state.maneuverBoost = 0;
   state.maneuverFightersToMove = [];
@@ -597,6 +601,7 @@ function finishEndTurn(state: GameState) {
 }
 
 function useAction(state: GameState) {
+  state.actionsTakenThisTurn++;
   state.players[state.currentPlayer].actionsRemaining--;
   if (state.players[state.currentPlayer].actionsRemaining <= 0) {
     endTurn(state);
@@ -805,13 +810,17 @@ export function resolveTeslaCoilChoice(state: GameState, coilCount: number): Gam
   s.teslaCoilChoiceContext = null;
 
   // Find which player owns the Tesla card
-  let teslaPlayerIndex = s.currentPlayer;
+  let teslaPlayerIndex = s.teslaCoilChoicePlayerIndex ?? s.currentPlayer;
+  if (teslaPlayerIndex === null || teslaPlayerIndex === undefined) {
+    teslaPlayerIndex = s.currentPlayer;
+  }
   if (s.combat) {
     const attacker = getFighter(s, s.combat.attackerId)!;
     const defender = getFighter(s, s.combat.defenderId)!;
     if (attacker.characterId === 'tesla') teslaPlayerIndex = attacker.owner;
     else if (defender.characterId === 'tesla') teslaPlayerIndex = defender.owner;
   }
+  s.teslaCoilChoicePlayerIndex = null;
 
   if (!effectType || coilCount === 0) {
     addLog(s, `Tesla chooses not to discharge coils.`);
@@ -2012,6 +2021,7 @@ function resolveCombat(state: GameState): GameState {
       if (coils >= 1) {
         s.teslaPendingCoilEffect = 'teslaCoilCancel';
         s.teslaCoilChoiceContext = 'immediately';
+        s.teslaCoilChoicePlayerIndex = defender.owner;
         s.phase = 'tesla_coilChoice';
         addLog(s, `Polyphase Coils: Choose how many coils to discharge (${coils} available). 1 = cancel effects, 2 = cancel effects + ignore value.`);
         return s;
@@ -2097,13 +2107,13 @@ function resolveCombat(state: GameState): GameState {
         s.combat.defenderEffectsCancelled = true;
         addLog(s, `${atkCardDef?.name}: Cancels all effects on defender's card!`);
       }
-      // Tesla: Polyphase Coils (attacker)
       // Tesla: Polyphase Coils (attacker) — interactive coil choice
       if (effect.type === 'teslaCoilCancel') {
         const coils = s.teslaCoilsCharged[attacker.owner];
         if (coils >= 1) {
           s.teslaPendingCoilEffect = 'teslaCoilCancel';
           s.teslaCoilChoiceContext = 'immediately';
+          s.teslaCoilChoicePlayerIndex = attacker.owner;
           s.phase = 'tesla_coilChoice';
           addLog(s, `Polyphase Coils: Choose how many coils to discharge (${coils} available). 1 = cancel effects, 2 = cancel effects + ignore value.`);
           return s;
@@ -2384,8 +2394,8 @@ function continueCombatAfterImmediately(s: GameState): GameState {
       }
       // Zelda: Needle Storm during (defender — versatile used as defense)
       if (effect.type === 'zeldaNeedleStormDuring') {
-        if (s.zeldaBonusAttackUsed) {
-          addLog(s, `Needle Storm: Made using Bonus Attack — value +2!`);
+        if (s.actionsTakenThisTurn >= 2) {
+          addLog(s, `Needle Storm: Third action this turn — value +2!`);
         }
       }
     }
@@ -2399,6 +2409,7 @@ function continueCombatAfterImmediately(s: GameState): GameState {
         if (coils >= 1) {
           s.teslaPendingCoilEffect = effect.type;
           s.teslaCoilChoiceContext = 'duringCombat_def';
+          s.teslaCoilChoicePlayerIndex = defender.owner;
           s.phase = 'tesla_coilChoice';
           const effectName = effect.type === 'teslaCoilValue' ? 'Death Ray' : 'X-Ray Radiation';
           addLog(s, `${effectName}: Choose how many coils to discharge (${coils} available).`);
@@ -2498,8 +2509,8 @@ function continueAttackerDuringCombat(s: GameState): GameState {
   if (!s.combat.attackerEffectsCancelled && atkCardDef) {
     for (const effect of atkDuring) {
       if (effect.type === 'zeldaNeedleStormDuring') {
-        if (s.zeldaBonusAttackUsed) {
-          addLog(s, `Needle Storm: Made using Bonus Attack — value +2!`);
+        if (s.actionsTakenThisTurn >= 2) {
+          addLog(s, `Needle Storm: Third action this turn — value +2!`);
         }
       }
       if (effect.type === 'zeldaNayrusLove') {
@@ -2518,6 +2529,7 @@ function continueAttackerDuringCombat(s: GameState): GameState {
         if (coils >= 1) {
           s.teslaPendingCoilEffect = effect.type;
           s.teslaCoilChoiceContext = 'duringCombat_atk';
+          s.teslaCoilChoicePlayerIndex = attacker.owner;
           s.phase = 'tesla_coilChoice';
           const effectName = effect.type === 'teslaCoilValue' ? 'Death Ray' : 'X-Ray Radiation';
           addLog(s, `${effectName}: Choose how many coils to discharge (${coils} available).`);
@@ -2751,17 +2763,17 @@ function resolveCombatDamage(state: GameState): GameState {
     }
   }
 
-  // Zelda: Needle Storm +2 if bonus attack
+  // Zelda: Needle Storm +2 if third action this turn
   if (!s.combat.attackerEffectsCancelled && atkCardDef) {
     for (const effect of atkCardDef.effects) {
-      if (effect.timing === 'duringCombat' && effect.type === 'zeldaNeedleStormDuring' && s.zeldaBonusAttackUsed) {
+      if (effect.timing === 'duringCombat' && effect.type === 'zeldaNeedleStormDuring' && s.actionsTakenThisTurn >= 2) {
         atkValue += 2;
       }
     }
   }
   if (!s.combat.defenderEffectsCancelled && defCardDef) {
     for (const effect of defCardDef.effects) {
-      if (effect.timing === 'duringCombat' && effect.type === 'zeldaNeedleStormDuring' && s.zeldaBonusAttackUsed) {
+      if (effect.timing === 'duringCombat' && effect.type === 'zeldaNeedleStormDuring' && s.actionsTakenThisTurn >= 2) {
         defValue += 2;
       }
     }
@@ -3728,6 +3740,7 @@ function processNextEffect(state: GameState): GameState {
     case 'teslaCoilChoice': {
       state.teslaPendingCoilEffect = effect.teslaEffectType || null;
       state.teslaCoilChoiceContext = 'afterCombat';
+      state.teslaCoilChoicePlayerIndex = effect.playerIndex;
       state.phase = 'tesla_coilChoice';
       addLog(state, effect.label);
       break;

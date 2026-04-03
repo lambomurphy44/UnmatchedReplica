@@ -2,7 +2,7 @@
 
 export type CardType = 'attack' | 'defense' | 'versatile' | 'scheme';
 export type EffectTiming = 'immediately' | 'duringCombat' | 'afterCombat';
-export type FighterRestriction = 'hero' | 'sidekick' | 'any';
+export type FighterRestriction = string;
 
 export interface CardEffect {
   type: string;
@@ -273,6 +273,8 @@ export interface GameState {
   zeldaImpasRevealedCards: Card[];    // revealed hand for Impa's Training
   zeldaImpasTargetPlayer: number | null; // which player's hand is revealed
   zeldaBonusAttackUsed: boolean;      // track if attack was a bonus attack (for Needle Storm)
+  actionsTakenThisTurn: number;       // track how many actions taken this turn (for Needle Storm third-action check)
+  teslaCoilChoicePlayerIndex: number | null; // track which player is making the coil choice
 
   // Yennenga damage splitting
   yennengaDamageSplit: {

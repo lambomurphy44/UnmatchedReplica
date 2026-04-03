@@ -79,8 +79,8 @@ export const CardHand: React.FC<CardHandProps> = ({ hand, charDef, onCardClick, 
                 {def.effectText && (
                   <div className="card-effect">{def.effectText}</div>
                 )}
-                {def.restriction !== 'any' && (
-                  <div className="card-restriction">{def.restriction === 'hero' ? 'Hero only' : 'Sidekick only'}</div>
+                {def.restriction !== 'Any' && (
+                  <div className="card-restriction">{def.restriction} only</div>
                 )}
               </div>
             );
