@@ -139,6 +139,7 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
     airScooterDefenderId: null,
     airScooterPendingSpace: null,
     searchCards: [],
+    prophecySelected: [],
     mewtwoReflectActive: [false, false],
     mewtwoCloneBatchRemaining: 0,
     mewtwoCloneVatsUsed: false,
@@ -1449,9 +1450,13 @@ export function resolveZeldaDinsFireTarget(state: GameState, targetFighterId: st
   const target = getFighter(s, targetFighterId);
   if (!target || target.hp <= 0) return continueEffectQueue(s);
 
-  target.hp = Math.max(0, target.hp - 1);
-  addLog(s, `Din's Fire: Deals 1 damage to ${target.name}! (${target.hp} HP)`);
-  checkHeroDeath(s);
+  if (s.zeldaNayrusLoveActive[target.owner]) {
+    addLog(s, `Din's Fire: Damage to ${target.name} prevented by Nayru's Love!`);
+  } else {
+    target.hp = Math.max(0, target.hp - 1);
+    addLog(s, `Din's Fire: Deals 1 damage to ${target.name}! (${target.hp} HP)`);
+    checkHeroDeath(s);
+  }
   return continueEffectQueue(s);
 }
 
@@ -1617,6 +1622,7 @@ function continueAfterCombat(s: GameState): GameState {
 /** Check and start Rain of Arrows follow-up combat, or finish turn */
 function checkRainOfArrowsFollowUp(s: GameState): GameState {
   if (s.phase === 'gameOver') return s;
+  s.zeldaNayrusLoveActive = [false, false];
 
   if (s.rainOfArrowsFollowUp) {
     const followUp = s.rainOfArrowsFollowUp;
@@ -1925,9 +1931,13 @@ export function resolveAangChargeChoice(state: GameState, choice: 'move' | 'dama
   if (choice === 'damage') {
     const opponent = getFighter(s, s.combat.defenderId);
     if (opponent && opponent.hp > 0) {
-      opponent.hp = Math.max(0, opponent.hp - 1);
-      addLog(s, `Sky Bison Charge: ${appa.name} deals 1 damage to ${opponent.name}! (${opponent.hp} HP)`);
-      checkHeroDeath(s);
+      if (s.zeldaNayrusLoveActive[opponent.owner]) {
+        addLog(s, `Sky Bison Charge: Damage prevented by Nayru's Love!`);
+      } else {
+        opponent.hp = Math.max(0, opponent.hp - 1);
+        addLog(s, `Sky Bison Charge: ${appa.name} deals 1 damage to ${opponent.name}! (${opponent.hp} HP)`);
+        checkHeroDeath(s);
+      }
     }
     return continueCombatAfterImmediately(s);
   } else {
@@ -2109,9 +2119,13 @@ function resolveCombat(state: GameState): GameState {
         addLog(s, `Light Arrow: Zelda form — drew 1 card.`);
       } else if (form === 'sheik') {
         if (attacker.hp > 0) {
-          attacker.hp = Math.max(0, attacker.hp - 1);
-          addLog(s, `Light Arrow: Sheik form — deals 1 damage to ${attacker.name}! (${attacker.hp} HP)`);
-          checkHeroDeath(s);
+          if (s.zeldaNayrusLoveActive[attacker.owner]) {
+            addLog(s, `Light Arrow: Sheik form — damage prevented by Nayru's Love!`);
+          } else {
+            attacker.hp = Math.max(0, attacker.hp - 1);
+            addLog(s, `Light Arrow: Sheik form — deals 1 damage to ${attacker.name}! (${attacker.hp} HP)`);
+            checkHeroDeath(s);
+          }
         }
       }
     }
@@ -2273,9 +2287,13 @@ function resolveCombat(state: GameState): GameState {
           addLog(s, `Light Arrow: Zelda form — drew 1 card.`);
         } else if (form === 'sheik') {
           if (defender.hp > 0) {
-            defender.hp = Math.max(0, defender.hp - 1);
-            addLog(s, `Light Arrow: Sheik form — deals 1 damage to ${defender.name}! (${defender.hp} HP)`);
-            checkHeroDeath(s);
+            if (s.zeldaNayrusLoveActive[defender.owner]) {
+              addLog(s, `Light Arrow: Sheik form — damage prevented by Nayru's Love!`);
+            } else {
+              defender.hp = Math.max(0, defender.hp - 1);
+              addLog(s, `Light Arrow: Sheik form — deals 1 damage to ${defender.name}! (${defender.hp} HP)`);
+              checkHeroDeath(s);
+            }
           }
         }
       }
@@ -2375,9 +2393,13 @@ function resolveCombat(state: GameState): GameState {
         addLog(s, `${defPlayer.name} draws 1 card.`);
         // Deal 1 damage to attacking fighter
         if (attacker.hp > 0) {
-          attacker.hp = Math.max(0, attacker.hp - 1);
-          addLog(s, `Sacrificial Block: Deals 1 damage to ${attacker.name}! (${attacker.hp} HP)`);
-          checkHeroDeath(s);
+          if (s.zeldaNayrusLoveActive[attacker.owner]) {
+            addLog(s, `Sacrificial Block: Damage to ${attacker.name} prevented by Nayru's Love!`);
+          } else {
+            attacker.hp = Math.max(0, attacker.hp - 1);
+            addLog(s, `Sacrificial Block: Deals 1 damage to ${attacker.name}! (${attacker.hp} HP)`);
+            checkHeroDeath(s);
+          }
         }
         // Cancel all effects on attacker's card
         s.combat.attackerEffectsCancelled = true;
@@ -2956,9 +2978,13 @@ function processAfterCombatEffect(
 
     case 'dealDamageIfWon':
       if (selfWon && effect.amount && opponent.hp > 0) {
-        opponent.hp = Math.max(0, opponent.hp - effect.amount);
-        addLog(state, `${self.name} deals ${effect.amount} additional damage to ${opponent.name}! (${opponent.hp} HP)`);
-        checkHeroDeath(state);
+        if (state.zeldaNayrusLoveActive[opponent.owner]) {
+          addLog(state, `${self.name}'s additional damage prevented by Nayru's Love!`);
+        } else {
+          opponent.hp = Math.max(0, opponent.hp - effect.amount);
+          addLog(state, `${self.name} deals ${effect.amount} additional damage to ${opponent.name}! (${opponent.hp} HP)`);
+          checkHeroDeath(state);
+        }
       }
       break;
 
@@ -3265,6 +3291,8 @@ function processAfterCombatEffect(
               fighterId: opponent.id,
               label: `Boomerang Bounce: Deal ${effect.amount || 1} damage (Yennenga may split).`,
             });
+          } else if (state.zeldaNayrusLoveActive[target.owner]) {
+            addLog(state, `Boomerang Bounce: Damage to ${target.name} prevented by Nayru's Love!`);
           } else {
             target.hp = Math.max(0, target.hp - (effect.amount || 1));
             addLog(state, `Boomerang Bounce: Boomerang is OUT — deals ${effect.amount || 1} damage to ${target.name}! (${target.hp} HP)`);
@@ -3292,11 +3320,14 @@ function processAfterCombatEffect(
     }
 
     case 'dealDamageIfLost': {
-      // Kyoshi Counter: if lost, deal 1 damage to opponent
       if (!selfWon && opponent.hp > 0) {
-        opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
-        addLog(state, `Kyoshi Counter: Deals ${effect.amount || 1} damage to ${opponent.name}! (${opponent.hp} HP)`);
-        checkHeroDeath(state);
+        if (state.zeldaNayrusLoveActive[opponent.owner]) {
+          addLog(state, `Kyoshi Counter: Damage prevented by Nayru's Love!`);
+        } else {
+          opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
+          addLog(state, `Kyoshi Counter: Deals ${effect.amount || 1} damage to ${opponent.name}! (${opponent.hp} HP)`);
+          checkHeroDeath(state);
+        }
       }
       break;
     }
@@ -3338,13 +3369,16 @@ function processAfterCombatEffect(
     }
 
     case 'dealDamageAfterCombat': {
-      // Point Blank: deal damage to opponent if adjacent to Yennenga (checked at after-combat time)
       if (opponent.hp > 0) {
         const hero = getHero(state, selfPlayer.index);
         if (hero && hero.hp > 0 && areAdjacent(state.board, hero.spaceId, opponent.spaceId)) {
-          opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
-          addLog(state, `Point Blank: ${opponent.name} is adjacent to Yennenga — deals ${effect.amount} damage! (${opponent.hp} HP)`);
-          checkHeroDeath(state);
+          if (state.zeldaNayrusLoveActive[opponent.owner]) {
+            addLog(state, `Point Blank: Damage prevented by Nayru's Love!`);
+          } else {
+            opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
+            addLog(state, `Point Blank: ${opponent.name} is adjacent to Yennenga — deals ${effect.amount} damage! (${opponent.hp} HP)`);
+            checkHeroDeath(state);
+          }
         } else {
           addLog(state, `Point Blank: ${opponent.name} is not adjacent to Yennenga — no damage dealt.`);
         }
@@ -3445,9 +3479,13 @@ function processAfterCombatEffect(
           );
           if (targets.length === 1) {
             const t = targets[0];
-            t.hp = Math.max(0, t.hp - 1);
-            addLog(state, `Din's Fire: Deals 1 damage to ${t.name}! (${t.hp} HP)`);
-            checkHeroDeath(state);
+            if (state.zeldaNayrusLoveActive[t.owner]) {
+              addLog(state, `Din's Fire: Damage to ${t.name} prevented by Nayru's Love!`);
+            } else {
+              t.hp = Math.max(0, t.hp - 1);
+              addLog(state, `Din's Fire: Deals 1 damage to ${t.name}! (${t.hp} HP)`);
+              checkHeroDeath(state);
+            }
           } else if (targets.length > 1) {
             // Need interactive target selection — use a queued effect
             queue.push({
@@ -3588,12 +3626,15 @@ function processAfterCombatEffect(
     // ---- Genie after-combat effects ----
 
     case 'dealDamageIfLostAdjacent': {
-      // Careful What You Wish For: if lost, deal 1 damage to adjacent enemy
       if (!selfWon && opponent.hp > 0) {
         if (areAdjacent(state.board, self.spaceId, opponent.spaceId)) {
-          opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
-          addLog(state, `Careful What You Wish For: Deals ${effect.amount || 1} damage to ${opponent.name}! (${opponent.hp} HP)`);
-          checkHeroDeath(state);
+          if (state.zeldaNayrusLoveActive[opponent.owner]) {
+            addLog(state, `Careful What You Wish For: Damage prevented by Nayru's Love!`);
+          } else {
+            opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
+            addLog(state, `Careful What You Wish For: Deals ${effect.amount || 1} damage to ${opponent.name}! (${opponent.hp} HP)`);
+            checkHeroDeath(state);
+          }
         } else {
           addLog(state, `Careful What You Wish For: ${opponent.name} is not adjacent — no damage.`);
         }
@@ -3667,9 +3708,13 @@ function processAfterCombatEffect(
     case 'genieDealDamageAdjacent': {
       // I Grant You... Death: deal 1 damage to adjacent fighter (combat opponent if adjacent)
       if (opponent.hp > 0 && areAdjacent(state.board, self.spaceId, opponent.spaceId)) {
-        opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
-        addLog(state, `I Grant You\u2026 Death: Deals ${effect.amount || 1} damage to ${opponent.name}! (${opponent.hp} HP)`);
-        checkHeroDeath(state);
+        if (state.zeldaNayrusLoveActive[opponent.owner]) {
+          addLog(state, `I Grant You\u2026 Death: Damage prevented by Nayru's Love!`);
+        } else {
+          opponent.hp = Math.max(0, opponent.hp - (effect.amount || 1));
+          addLog(state, `I Grant You\u2026 Death: Deals ${effect.amount || 1} damage to ${opponent.name}! (${opponent.hp} HP)`);
+          checkHeroDeath(state);
+        }
       } else if (opponent.hp > 0) {
         addLog(state, `I Grant You\u2026 Death: ${opponent.name} is not adjacent — no damage.`);
       }
@@ -3777,8 +3822,12 @@ function processNextEffect(state: GameState): GameState {
         );
         const dmg = effect.damageAmount || 2;
         for (const enemy of enemies) {
-          enemy.hp = Math.max(0, enemy.hp - dmg);
-          addLog(state, `Avatar State deals ${dmg} damage to ${enemy.name}! (${enemy.hp} HP)`);
+          if (state.zeldaNayrusLoveActive[enemy.owner]) {
+            addLog(state, `Avatar State: Damage to ${enemy.name} prevented by Nayru's Love!`);
+          } else {
+            enemy.hp = Math.max(0, enemy.hp - dmg);
+            addLog(state, `Avatar State deals ${dmg} damage to ${enemy.name}! (${enemy.hp} HP)`);
+          }
         }
         if (enemies.length === 0) {
           addLog(state, `Avatar State: No enemy fighters in Aang's zone.`);
@@ -3841,8 +3890,12 @@ function processNextEffect(state: GameState): GameState {
         );
         if (allNearby.length > 0) {
           for (const target of allNearby) {
-            target.hp = Math.max(0, target.hp - 1);
-            addLog(state, `I Am Freed: ${target.name} takes 1 damage! (${target.hp} HP)`);
+            if (state.zeldaNayrusLoveActive[target.owner]) {
+              addLog(state, `I Am Freed: Damage to ${target.name} prevented by Nayru's Love!`);
+            } else {
+              target.hp = Math.max(0, target.hp - 1);
+              addLog(state, `I Am Freed: ${target.name} takes 1 damage! (${target.hp} HP)`);
+            }
           }
           checkHeroDeath(state);
         } else {
@@ -4018,6 +4071,10 @@ export function resolveZoneDamageTarget(state: GameState, targetFighterId: strin
   s.zoneDamageTargetZone = '';
   s.zoneDamageAmount = 0;
   addLog(s, `Boomerang Bounce: Targets ${target.name}!`);
+  if (s.zeldaNayrusLoveActive[target.owner]) {
+    addLog(s, `Boomerang Bounce: Damage prevented by Nayru's Love!`);
+    return continueEffectQueue(s);
+  }
   if (tryYennengaDamageSplit(s, target, dmg, 'effectQueue')) {
     return s;
   }
@@ -4036,6 +4093,61 @@ export function getSearchableCards(state: GameState): { card: Card; defName: str
     const def = getCardDef(card, charDef);
     return { card, defName: def?.name || 'Unknown' };
   });
+}
+
+/** Prophecy: player clicks a card to select/deselect it. When 2 are selected, finalize. */
+export function resolveProphecyChoice(state: GameState, cardId: string): GameState {
+  const s = clone(state);
+  const player = currentPlayer(s);
+  const charDef = getCharDef(player.characterId);
+
+  // Toggle selection
+  if (s.prophecySelected.includes(cardId)) {
+    s.prophecySelected = s.prophecySelected.filter(id => id !== cardId);
+    return s;
+  }
+  s.prophecySelected = [...s.prophecySelected, cardId];
+
+  // Not done yet — need 2 selected
+  if (s.prophecySelected.length < 2) return s;
+
+  // Finalize: move selected cards to hand, leave the rest on top of deck
+  const kept: Card[] = [];
+  const returned: Card[] = [];
+  for (const card of s.searchCards) {
+    if (s.prophecySelected.includes(card.id)) {
+      kept.push(card);
+    } else {
+      returned.push(card);
+    }
+  }
+
+  // Remove the revealed cards from the deck
+  for (const card of s.searchCards) {
+    const idx = player.deck.findIndex(c => c.id === card.id);
+    if (idx >= 0) player.deck.splice(idx, 1);
+  }
+
+  // Add chosen cards to hand
+  for (const card of kept) {
+    player.hand.push(card);
+    const def = getCardDef(card, charDef);
+    addLog(s, `Prophecy: Added ${def?.name || 'a card'} to hand.`);
+  }
+
+  // Put the rest back on top of the deck
+  for (const card of returned) {
+    player.deck.push(card);
+    const def = getCardDef(card, charDef);
+    addLog(s, `Prophecy: Put ${def?.name || 'a card'} back on top of the deck.`);
+  }
+
+  s.searchCards = [];
+  s.prophecySelected = [];
+  s.pendingSchemeCard = null;
+  s.phase = 'playing';
+  useAction(s);
+  return s;
 }
 
 export function resolveSearchChoice(state: GameState, cardId: string): GameState {
@@ -4132,11 +4244,23 @@ export function playScheme(state: GameState, cardId: string): GameState {
     }
 
     case 'arthur_prophecy': {
-      // Look at top 4, add 2 to hand (simplified: just draw 2)
-      const drawCount = Math.min(2, player.deck.length);
-      drawCards(s, s.currentPlayer, drawCount);
-      addLog(s, `Prophecy: Drew ${drawCount} card(s) from the top of the deck.`);
-      break;
+      // Look at top 4, add 2 to hand, put the other 2 back on top
+      const revealCount = Math.min(4, player.deck.length);
+      if (revealCount === 0) {
+        addLog(s, `Prophecy: Deck is empty, nothing to look at.`);
+        break;
+      }
+      if (revealCount <= 2) {
+        drawCards(s, s.currentPlayer, revealCount);
+        addLog(s, `Prophecy: Deck has ${revealCount} card(s) — added all to hand.`);
+        break;
+      }
+      s.searchCards = player.deck.slice(player.deck.length - revealCount);
+      s.prophecySelected = [];
+      s.pendingSchemeCard = card;
+      s.phase = 'arthur_prophecy';
+      addLog(s, `Prophecy: Revealing top ${revealCount} cards. Choose 2 to add to your hand.`);
+      return s;
     }
 
     case 'arthur_command_storms': {
@@ -5035,9 +5159,13 @@ export function useGenieImprisonedWrath(state: GameState, targetFighterId: strin
   const def1 = getCardDef(card1, charDef);
   const def2 = getCardDef(card2, charDef);
   addLog(s, `Imprisoned Wrath: Discarded ${def1?.name || 'a card'} and ${def2?.name || 'a card'}!`);
-  target.hp = Math.max(0, target.hp - 2);
-  addLog(s, `Imprisoned Wrath: Deals 2 damage to ${target.name}! (${target.hp} HP)`);
-  checkHeroDeath(s);
+  if (s.zeldaNayrusLoveActive[target.owner]) {
+    addLog(s, `Imprisoned Wrath: Damage to ${target.name} prevented by Nayru's Love!`);
+  } else {
+    target.hp = Math.max(0, target.hp - 2);
+    addLog(s, `Imprisoned Wrath: Deals 2 damage to ${target.name}! (${target.hp} HP)`);
+    checkHeroDeath(s);
+  }
   if (s.phase !== 'gameOver') {
     return continueEffectQueue(s);
   }

@@ -687,6 +687,12 @@
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
 }
 
+.game-card.card-selected {
+  border-color: #ffd700 !important;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.6);
+  transform: translateY(-4px);
+}
+
 .game-card.card-dimmed {
   opacity: 0.35;
   cursor: default;

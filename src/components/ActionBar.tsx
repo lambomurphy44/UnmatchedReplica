@@ -19,7 +19,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({ state, onManeuver, onStart
   const charDef = getCharDef(player.characterId);
   // Check if any alive fighter can play a scheme card
   const hasSchemes = getPlayableCards(state, 'scheme').some(({ def }) =>
-    alive.some(f => canFighterPlayCard(f, def))
+    alive.some(f => canFighterPlayCard(f, def, state))
   );
 
   // For each fighter, check if they have valid targets AND playable attack/versatile cards
@@ -30,7 +30,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({ state, onManeuver, onStart
       const def = charDef.deckCards.find(d => d.id === card.defId);
       if (!def) return false;
       if (def.type !== 'attack' && def.type !== 'versatile') return false;
-      return canFighterPlayCard(f, def);
+      return canFighterPlayCard(f, def, state);
     });
     return hasPlayableAttackCards;
   });

@@ -601,6 +601,7 @@ export const Game: React.FC = () => {
             filter="defense"
             fighter={defender}
             label={`${myPlayer.name}'s Hand (Defense)`}
+            gameState={gs}
           />
         );
       }
@@ -625,6 +626,19 @@ export const Game: React.FC = () => {
             charDef={myCharDef}
             onCardClick={handleCardClick}
             label={`${myPlayer.name}'s Deck (Choose a card)`}
+          />
+        );
+      }
+
+      // Prophecy: choose 2 of top 4
+      if (gs.phase === 'arthur_prophecy' && gs.currentPlayer === myIndex) {
+        return (
+          <CardHand
+            hand={gs.searchCards}
+            charDef={myCharDef}
+            onCardClick={(cardId: string) => act('resolveProphecyChoice', { cardId })}
+            label={`Prophecy: Choose 2 cards to add to your hand (${gs.prophecySelected.length}/2 selected)`}
+            selectedCardIds={gs.prophecySelected}
           />
         );
       }
@@ -660,6 +674,7 @@ export const Game: React.FC = () => {
           fighter={attackerFighter}
           aliveFighters={gs.phase === 'scheme_selectCard' && canInteract ? myAliveFighters : undefined}
           label={`${myPlayer.name}'s Hand`}
+          gameState={gs}
         />
       );
     }
@@ -675,6 +690,7 @@ export const Game: React.FC = () => {
           filter="defense"
           fighter={defender}
           label={`${opponentPlayer.name}'s Hand (Defense)`}
+          gameState={gs}
         />
       );
     }
@@ -722,6 +738,17 @@ export const Game: React.FC = () => {
         />
       );
     }
+    if (gs.phase === 'arthur_prophecy') {
+      return (
+        <CardHand
+          hand={gs.searchCards}
+          charDef={charDef}
+          onCardClick={(cardId: string) => act('resolveProphecyChoice', { cardId })}
+          label={`Prophecy: Choose 2 cards to add to your hand (${gs.prophecySelected.length}/2 selected)`}
+          selectedCardIds={gs.prophecySelected}
+        />
+      );
+    }
 
     const attackerFighter = gs.combat && gs.phase === 'attack_selectCard'
       ? getFighter(gs, gs.combat.attackerId) : undefined;
@@ -738,6 +765,7 @@ export const Game: React.FC = () => {
         fighter={attackerFighter}
         aliveFighters={gs.phase === 'scheme_selectCard' ? aliveFightersCurrent : undefined}
         label={`${cp.name}'s Hand`}
+        gameState={gs}
       />
     );
   };

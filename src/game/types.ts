@@ -108,6 +108,7 @@ export type Phase =
   | 'attack_selectTarget'
   | 'attack_selectCard'
   | 'arthur_attackBoost'
+  | 'arthur_prophecy'           // Prophecy: choose 2 of top 4 cards to keep
   | 'attack_defenderCard'
   | 'attack_resolve'
   | 'combat_duringBoost'      // Noble Sacrifice / Second Shot: choose boost card mid-combat
@@ -228,6 +229,7 @@ export interface GameState {
 
   // Aang-specific: deck search choices (Meditate)
   searchCards: Card[];
+  prophecySelected: string[]; // Prophecy: card IDs the player has selected so far
 
   // Mewtwo-specific
   mewtwoReflectActive: [boolean, boolean]; // per player: is Reflect in play area?

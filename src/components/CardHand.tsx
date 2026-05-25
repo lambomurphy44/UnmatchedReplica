@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Card, CharacterDef, Fighter } from '../game/types';
+import type { Card, CharacterDef, Fighter, GameState } from '../game/types';
 import { getCardDef, canFighterPlayCard } from '../game/engine';
 
 interface CardHandProps {
@@ -11,6 +11,8 @@ interface CardHandProps {
   aliveFighters?: Fighter[];
   label: string;
   hidden?: boolean;
+  selectedCardIds?: string[];
+  gameState?: GameState;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -20,7 +22,7 @@ const TYPE_COLORS: Record<string, string> = {
   scheme: '#f9a825',
 };
 
-export const CardHand: React.FC<CardHandProps> = ({ hand, charDef, onCardClick, filter, fighter, aliveFighters, label, hidden }) => {
+export const CardHand: React.FC<CardHandProps> = ({ hand, charDef, onCardClick, filter, fighter, aliveFighters, label, hidden, selectedCardIds, gameState }) => {
   // Build quantity map from deck definition
   const quantityMap: Record<string, number> = {};
   for (const dc of charDef.deckCards) {
@@ -37,8 +39,8 @@ export const CardHand: React.FC<CardHandProps> = ({ hand, charDef, onCardClick, 
   const isPlayable = (def: typeof allCards[0]['def']): boolean => {
     if (!filter) return true;
     // Check fighter restriction
-    if (fighter && !canFighterPlayCard(fighter, def)) return false;
-    if (aliveFighters && !aliveFighters.some(f => canFighterPlayCard(f, def))) return false;
+    if (fighter && !canFighterPlayCard(fighter, def, gameState)) return false;
+    if (aliveFighters && !aliveFighters.some(f => canFighterPlayCard(f, def, gameState))) return false;
     // Check type filter
     if (filter === 'attack') return def.type === 'attack' || def.type === 'versatile';
     if (filter === 'defense') return def.type === 'defense' || def.type === 'versatile';
@@ -56,10 +58,11 @@ export const CardHand: React.FC<CardHandProps> = ({ hand, charDef, onCardClick, 
         ) : (
           allCards.map(({ card, def }) => {
             const playable = isPlayable(def);
+            const isSelected = selectedCardIds?.includes(card.id) ?? false;
             return (
               <div
                 key={card.id}
-                className={`game-card ${!playable && filter ? 'card-dimmed' : ''}`}
+                className={`game-card ${!playable && filter ? 'card-dimmed' : ''} ${isSelected ? 'card-selected' : ''}`}
                 style={{ borderColor: TYPE_COLORS[def.type] || '#666' }}
                 onClick={() => {
                   if (playable || !filter) {

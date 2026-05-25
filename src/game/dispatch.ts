@@ -7,7 +7,7 @@ import {
   selectArthurBoostCard, selectDuringCombatBoost,
   resolveEffectMove, skipEffectMove, resolveEffectDiscard, resolveEffectPlace,
   resolveEffectPush, skipEffectPush,
-  resolveSearchChoice,
+  resolveSearchChoice, resolveProphecyChoice,
   playScheme, resolveSchemeTarget,
   resolveSchemeSidekickMove, skipSchemeSidekickMove,
   selectSchemeMoveAllFighter, executeSchemeMoveAllMove,
@@ -146,6 +146,8 @@ export function dispatchAction(state: GameState, actionType: string, args: Recor
         return skipEffectPush(state);
       case 'resolveSearchChoice':
         return resolveSearchChoice(state, args.cardId as string);
+      case 'resolveProphecyChoice':
+        return resolveProphecyChoice(state, args.cardId as string);
       case 'discardExcessCard':
         return discardExcessCard(state, args.cardId as string);
       // Mewtwo actions
