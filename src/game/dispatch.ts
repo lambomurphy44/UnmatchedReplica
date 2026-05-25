@@ -2,7 +2,7 @@ import type { GameState } from './types';
 import {
   startManeuver, applyManeuverBoost, selectManeuverFighter,
   executeManeuverMove, skipFighterMove, skipAllManeuverMoves,
-  startAttack, selectAttackTarget, resolveAirScooterChoice,
+  startAttack, selectAttackTarget, resolveAirScooterChoice, resolveAangFlyingBisonZone, resolveAangChargeChoice,
   selectAttackCard, selectDefenseCard, confirmCombatResolve,
   selectArthurBoostCard, selectDuringCombatBoost,
   resolveEffectMove, skipEffectMove, resolveEffectDiscard, resolveEffectPlace,
@@ -92,6 +92,10 @@ export function dispatchAction(state: GameState, actionType: string, args: Recor
         return selectAttackTarget(state, args.defenderId as string);
       case 'resolveAirScooterChoice':
         return resolveAirScooterChoice(state, args.spaceId as string);
+      case 'resolveAangFlyingBisonZone':
+        return resolveAangFlyingBisonZone(state, args.spaceId as string);
+      case 'resolveAangChargeChoice':
+        return resolveAangChargeChoice(state, args.choice as 'move' | 'damage');
       case 'selectAttackCard':
         return selectAttackCard(state, args.cardId as string);
       case 'selectArthurBoostCard':
@@ -103,7 +107,7 @@ export function dispatchAction(state: GameState, actionType: string, args: Recor
       case 'selectDuringCombatBoost':
         return selectDuringCombatBoost(state, (args.cardId as string) || null);
       case 'cancelAttack':
-        return { ...JSON.parse(JSON.stringify(state)), phase: 'playing', selectedFighter: null, combat: null } as GameState;
+        return { ...JSON.parse(JSON.stringify(state)), phase: 'playing', selectedFighter: null, combat: null, airScooterPendingSpace: null } as GameState;
       case 'cancelAttackTarget':
         return { ...JSON.parse(JSON.stringify(state)), phase: 'playing', selectedFighter: null } as GameState;
       case 'startScheme':

@@ -295,6 +295,10 @@ export const Game: React.FC = () => {
       act('resolveAirScooterChoice', { spaceId });
       return;
     }
+    if (gs.phase === 'aang_flying_bison_zone') {
+      act('resolveAangFlyingBisonZone', { spaceId });
+      return;
+    }
     if (gs.phase === 'effect_moveFighter') {
       act('resolveEffectMove', { spaceId });
       return;
@@ -470,7 +474,7 @@ export const Game: React.FC = () => {
         return getReachableSpaces(gs.board, f.spaceId, range, gs.fighters, f.id);
       }
     }
-    if (gs.phase === 'aang_air_scooter_choice') {
+    if (gs.phase === 'aang_air_scooter_choice' || gs.phase === 'aang_flying_bison_zone') {
       return gs.airScooterSpaces;
     }
     if (gs.phase === 'attack_selectTarget' && gs.selectedFighter) {
@@ -1384,6 +1388,24 @@ export const Game: React.FC = () => {
       {canInteract && gs.phase === 'aang_air_scooter_choice' && (
         <div className="phase-prompt">
           <div className="phase-text">Air Scooter: Choose which space Aang moves into.</div>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'aang_flying_bison_zone' && (
+        <div className="phase-prompt">
+          <div className="phase-text">Choose a destination space for Appa.</div>
+        </div>
+      )}
+
+      {canInteract && gs.phase === 'aang_charge_choice' && (
+        <div className="phase-prompt">
+          <div className="phase-text">Sky Bison Charge: Choose one —</div>
+          <button className="action-btn" onClick={() => act('resolveAangChargeChoice', { choice: 'move' })}>
+            Move Appa up to 3 spaces
+          </button>
+          <button className="action-btn" onClick={() => act('resolveAangChargeChoice', { choice: 'damage' })}>
+            Deal 1 damage to opposing fighter
+          </button>
         </div>
       )}
 

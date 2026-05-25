@@ -164,6 +164,7 @@ export interface QueuedEffect {
   range?: number;
   label: string;
   teslaEffectType?: string; // for teslaCoilChoice: which effect is pending
+  drawCardsIfPushed?: number; // for Water Whip: draw this many cards if push succeeds
 }
 
 export interface CombatState {
@@ -223,6 +224,7 @@ export interface GameState {
   // Aang-specific: Air Scooter space choice
   airScooterSpaces: string[];
   airScooterDefenderId: string | null;
+  airScooterPendingSpace: string | null; // space Aang will move to once attack card is confirmed
 
   // Aang-specific: deck search choices (Meditate)
   searchCards: Card[];

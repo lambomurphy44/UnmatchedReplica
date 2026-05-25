@@ -137,6 +137,7 @@ export function createGame(char0Id: string, char1Id: string, p0Name: string, p1N
     pushRange: 0,
     airScooterSpaces: [],
     airScooterDefenderId: null,
+    airScooterPendingSpace: null,
     searchCards: [],
     mewtwoReflectActive: [false, false],
     mewtwoCloneBatchRemaining: 0,
@@ -1839,9 +1840,8 @@ export function selectAttackTarget(state: GameState, defenderId: string): GameSt
   if (attacker.isHero && attacker.characterId === 'aang' && !areAdjacent(s.board, attacker.spaceId, defender.spaceId)) {
     const betweenSpaces = getSpacesBetween(s.board, attacker.spaceId, defender.spaceId, s.fighters, attacker.id);
     if (betweenSpaces.length === 1) {
-      // Only one valid space — auto-select
-      addLog(s, `Air Scooter! Aang zips to ${betweenSpaces[0]} between the fighters!`);
-      attacker.spaceId = betweenSpaces[0];
+      // Store pending space; Aang moves only after attack card is confirmed
+      s.airScooterPendingSpace = betweenSpaces[0];
       airScooterUsed = true;
     } else if (betweenSpaces.length > 1) {
       // Multiple valid spaces — prompt the player to choose
@@ -1884,10 +1884,10 @@ export function resolveAirScooterChoice(state: GameState, spaceId: string): Game
   const defenderId = s.airScooterDefenderId;
   const defender = getFighter(s, defenderId)!;
 
-  addLog(s, `Air Scooter! Aang zips to ${spaceId} between the fighters!`);
-  attacker.spaceId = spaceId;
+  // Store pending space; Aang moves only after attack card is confirmed
+  s.airScooterPendingSpace = spaceId;
 
-  // Clear Air Scooter state
+  // Clear Air Scooter choice state
   s.airScooterSpaces = [];
   s.airScooterDefenderId = null;
 
@@ -1915,6 +1915,50 @@ export function resolveAirScooterChoice(state: GameState, spaceId: string): Game
   return s;
 }
 
+/** Sky Bison Charge: resolve the move/damage choice */
+export function resolveAangChargeChoice(state: GameState, choice: 'move' | 'damage'): GameState {
+  const s = clone(state);
+  if (!s.combat) return s;
+  const appa = getFighter(s, s.combat.attackerId);
+  if (!appa) return continueCombatAfterImmediately(s);
+
+  if (choice === 'damage') {
+    const opponent = getFighter(s, s.combat.defenderId);
+    if (opponent && opponent.hp > 0) {
+      opponent.hp = Math.max(0, opponent.hp - 1);
+      addLog(s, `Sky Bison Charge: ${appa.name} deals 1 damage to ${opponent.name}! (${opponent.hp} HP)`);
+      checkHeroDeath(s);
+    }
+    return continueCombatAfterImmediately(s);
+  } else {
+    // Move Appa up to 3 spaces — reuse airScooterSpaces to store valid destinations
+    const reachable = getReachableSpaces(s.board, appa.spaceId, 3, s.fighters, appa.id);
+    s.airScooterSpaces = reachable;
+    s.airScooterDefenderId = appa.id; // store the fighter being moved
+    s.phase = 'aang_flying_bison_zone'; // reuse the interactive move phase
+    addLog(s, `Sky Bison Charge: Choose where to move ${appa.name} (up to 3 spaces).`);
+    return s;
+  }
+}
+
+export function resolveAangFlyingBisonZone(state: GameState, spaceId: string): GameState {
+  const s = clone(state);
+  if (!s.airScooterSpaces.includes(spaceId) || !s.combat) return s;
+  const fighterId = s.airScooterDefenderId!;
+  const fighter = getFighter(s, fighterId);
+  if (fighter) {
+    fighter.spaceId = spaceId;
+    // Determine context from the attack card
+    const atkCharDef = getCharDef(s.players[s.currentPlayer].characterId);
+    const atkCardDef = s.combat.attackCard ? getCardDef(s.combat.attackCard, atkCharDef) : null;
+    const cardName = atkCardDef?.name ?? 'Ability';
+    addLog(s, `${cardName}: ${fighter.name} moves to ${spaceId}!`);
+  }
+  s.airScooterSpaces = [];
+  s.airScooterDefenderId = null;
+  return continueCombatAfterImmediately(s);
+}
+
 export function selectAttackCard(state: GameState, cardId: string): GameState {
   const s = clone(state);
   const player = s.players[s.currentPlayer];
@@ -1922,6 +1966,17 @@ export function selectAttackCard(state: GameState, cardId: string): GameState {
   if (cardIdx < 0 || !s.combat) return s;
   const card = player.hand.splice(cardIdx, 1)[0];
   s.combat.attackCard = card;
+
+  // Air Scooter: now that attack is confirmed, move Aang to the pending between-space
+  if (s.airScooterPendingSpace) {
+    const attacker = getFighter(s, s.combat.attackerId);
+    if (attacker) {
+      addLog(s, `Air Scooter! Aang zips to ${s.airScooterPendingSpace} between the fighters!`);
+      attacker.spaceId = s.airScooterPendingSpace;
+      s.combat.airScooterUsed = true;
+    }
+    s.airScooterPendingSpace = null;
+  }
 
   const charDef = getCharDef(player.characterId);
   const def = getCardDef(card, charDef);
@@ -2136,9 +2191,7 @@ function resolveCombat(state: GameState): GameState {
         }
       }
       if (effect.type === 'moveToNewZone') {
-        // Flying Bison: move Appa to any space in a different zone (auto-resolve: skip for now, handle after combat)
-        // This is an immediately effect on a versatile card used as attack
-        // We auto-resolve: just log it. Full interactive would need a phase pause.
+        // Flying Bison: move Appa to any space in a different zone (interactive)
         const fighter = getFighter(s, s.combat.attackerId);
         if (fighter && !fighter.isHero && fighter.characterId === 'aang') {
           const currentSpace = getSpace(s.board, fighter.spaceId);
@@ -2149,10 +2202,11 @@ function resolveCombat(state: GameState): GameState {
               !isSpaceOccupied(s, sp.id, fighter.id)
             );
             if (validSpaces.length > 0) {
-              // Auto-pick: move to a random valid space (simplified)
-              const target = validSpaces[Math.floor(Math.random() * validSpaces.length)];
-              fighter.spaceId = target.id;
-              addLog(s, `Flying Bison: ${fighter.name} flies to ${target.id} in a new zone!`);
+              s.airScooterSpaces = validSpaces.map(sp => sp.id);
+              s.airScooterDefenderId = s.combat!.attackerId; // reuse field to store fighter being moved
+              s.phase = 'aang_flying_bison_zone';
+              addLog(s, `Flying Bison: Choose a space in a different zone for ${fighter.name}!`);
+              return s;
             } else {
               addLog(s, `Flying Bison: No valid spaces in a different zone.`);
             }
@@ -2160,13 +2214,12 @@ function resolveCombat(state: GameState): GameState {
         }
       }
       if (effect.type === 'chargeChoice') {
-        // Sky Bison Charge: choose move up to 3 or deal 1 damage
-        // Auto-resolve: deal 1 damage to opposing fighter (simplified)
-        const opponent = getFighter(s, s.combat.defenderId);
-        if (opponent && opponent.hp > 0) {
-          opponent.hp = Math.max(0, opponent.hp - 1);
-          addLog(s, `Sky Bison Charge: Deals 1 damage to ${opponent.name}! (${opponent.hp} HP)`);
-          checkHeroDeath(s);
+        // Sky Bison Charge: interactive choice — move Appa up to 3 spaces OR deal 1 damage
+        const appa = getFighter(s, s.combat.attackerId);
+        if (appa) {
+          s.phase = 'aang_charge_choice';
+          addLog(s, `Sky Bison Charge: Choose — move ${appa.name} up to 3 spaces, or deal 1 damage to the opposing fighter.`);
+          return s;
         }
       }
       // Mewtwo: Cloned Instincts — cancel opponent's effects if flanked
@@ -3006,6 +3059,22 @@ function processAfterCombatEffect(
 
     // ---- Aang-specific after-combat effects ----
 
+    case 'pushIfMoved': {
+      // Whirlwind Kick: if Aang moved this turn, may push the defender up to 1 space
+      const startSpace = state.turnStartSpaces[self.id];
+      const hasMoved = startSpace && startSpace !== self.spaceId;
+      if (hasMoved && opponent.hp > 0) {
+        queue.push({
+          type: 'pushFighter',
+          playerIndex: selfPlayer.index,
+          targetFighterId: opponent.id,
+          range: effect.amount || 1,
+          label: `Whirlwind Kick: Aang moved this turn — you may push ${opponent.name} up to ${effect.amount || 1} space.`,
+        });
+      }
+      break;
+    }
+
     case 'gainActionAndDraw':
       // Air Slice: gain 1 action and draw 1 card
       selfPlayer.actionsRemaining++;
@@ -3053,7 +3122,8 @@ function processAfterCombatEffect(
           playerIndex: selfPlayer.index,
           targetFighterId: opponent.id,
           range: effect.amount || 2,
-          label: `Push ${opponent.name} up to ${effect.amount || 2} spaces. If pushed, draw 1 card.`,
+          drawCardsIfPushed: 1,
+          label: `Water Whip: Push ${opponent.name} up to ${effect.amount || 2} spaces. If pushed, draw 1 card.`,
         });
       }
       break;
@@ -3073,19 +3143,16 @@ function processAfterCombatEffect(
     }
 
     case 'moveHeroIfDamaged': {
-      // Air Shield: if you took damage, move Aang 1 space
+      // Air Shield: if you took damage, move the defending fighter 1 space
       const combat = state.combat;
-      if (combat && combat.damageDealt > 0) {
-        const hero = getHero(state, selfPlayer.index);
-        if (hero && hero.hp > 0 && effect.amount && effect.amount > 0) {
-          queue.push({
-            type: 'moveFighter',
-            playerIndex: selfPlayer.index,
-            fighterId: hero.id,
-            range: effect.amount,
-            label: `Move ${hero.name} ${effect.amount} space (took damage).`,
-          });
-        }
+      if (combat && combat.damageDealt > 0 && self.hp > 0 && effect.amount && effect.amount > 0) {
+        queue.push({
+          type: 'moveFighter',
+          playerIndex: selfPlayer.index,
+          fighterId: self.id,
+          range: effect.amount,
+          label: `Air Shield: Took damage — move ${self.name} up to ${effect.amount} space.`,
+        });
       }
       break;
     }
@@ -3900,6 +3967,7 @@ export function getPushSpaces(state: GameState, fighterId: string, range: number
 
 export function resolveEffectPush(state: GameState, targetSpaceId: string): GameState {
   const s = clone(state);
+  const effect = s.effectQueue[0];
   const fighterId = s.pushTargetId;
   if (!fighterId) return continueEffectQueue(s);
   const fighter = getFighter(s, fighterId);
@@ -3909,11 +3977,10 @@ export function resolveEffectPush(state: GameState, targetSpaceId: string): Game
   if (reachable.includes(targetSpaceId)) {
     fighter.spaceId = targetSpaceId;
     addLog(s, `${fighter.name} pushed to ${targetSpaceId}!`);
-
-    // Water Whip: if pushed, draw 1 card (check if the effect label mentions it)
-    // We handle this simply: if the current effect queue label mentions "draw 1 card", draw
-    // Actually, let's just always draw for pushAndDrawIfPushed — we use a simpler check
-    // The pushing player draws if push actually happened
+    if (effect?.drawCardsIfPushed) {
+      drawCards(s, effect.playerIndex, effect.drawCardsIfPushed);
+      addLog(s, `Drew ${effect.drawCardsIfPushed} card(s) from push!`);
+    }
   }
 
   s.pushTargetId = null;

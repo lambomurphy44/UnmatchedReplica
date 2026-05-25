@@ -539,7 +539,7 @@ const aangCards: CardDef[] = [
     effects: [
       { type: 'moveHeroIfDamaged', timing: 'afterCombat', amount: 1 },
     ],
-    effectText: 'AFTER COMBAT: If you took damage, move Aang 1 space.',
+    effectText: 'AFTER COMBAT: If you took damage, move your defending fighter up to 1 space.',
   },
   {
     id: 'aang_sky_bison_swap',
